@@ -34,6 +34,5 @@ pub trait Encodable: Sized {
 /// used on structures that implement Decodable or Encodable to allow
 /// them to be encoded as tag fields
 pub trait ValueType {
-    /// The type of tdf value this is
-    fn value_type() -> TdfType;
+    const TYPE: TdfType;
 }

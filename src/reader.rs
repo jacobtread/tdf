@@ -202,7 +202,7 @@ impl<'a> TdfReader<'a> {
     pub fn read_map<K: Decodable + ValueType, V: Decodable + ValueType>(
         &mut self,
     ) -> DecodeResult<TdfMap<K, V>> {
-        let length: usize = self.read_map_header(K::value_type(), V::value_type())?;
+        let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
         self.read_map_body(length)
     }
 
@@ -319,7 +319,7 @@ impl<'a> TdfReader<'a> {
     ///
     /// `tag` The tag name to read
     pub fn tag<C: Decodable + ValueType>(&mut self, tag: &[u8]) -> DecodeResult<C> {
-        self.until_tag(tag, C::value_type())?;
+        self.until_tag(tag, C::TYPE)?;
         C::decode(self)
     }
 

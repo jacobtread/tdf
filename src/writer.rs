@@ -252,7 +252,7 @@ impl TdfWriter {
         value: &C,
     ) {
         self.tag_union_start(tag, key);
-        self.tag(value_tag, C::value_type());
+        self.tag(value_tag, C::TYPE);
         value.encode(self);
     }
 
@@ -268,7 +268,7 @@ impl TdfWriter {
     /// `tag`   The tag to write
     /// `value` The value to write
     pub fn tag_value<C: Encodable + ValueType>(&mut self, tag: &[u8], value: &C) {
-        self.tag(tag, C::value_type());
+        self.tag(tag, C::TYPE);
         value.encode(self);
     }
 
@@ -320,7 +320,7 @@ impl TdfWriter {
         K: Encodable + ValueType,
         V: Encodable + ValueType,
     {
-        self.tag_map_start(tag, K::value_type(), V::value_type(), values.len());
+        self.tag_map_start(tag, K::TYPE, V::TYPE, values.len());
         for (key, value) in values {
             key.encode(self);
             value.encode(self);
