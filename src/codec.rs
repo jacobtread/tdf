@@ -37,15 +37,3 @@ pub trait ValueType {
     /// The type of tdf value this is
     fn value_type() -> TdfType;
 }
-
-/// Macro for generating the ValueType implementation for a type
-#[macro_export]
-macro_rules! value_type {
-    ($for:ty, $type:expr) => {
-        impl $crate::codec::ValueType for $for {
-            fn value_type() -> $crate::tag::TdfType {
-                $type
-            }
-        }
-    };
-}
