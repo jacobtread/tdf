@@ -14,6 +14,7 @@ name = "tdf"
 version = "0.0.0"
 keywords = ["EA", "serialization", "packet", "blazepk"]
 categories = ["network-programming", "parser-implementations"]
+description = "Library for parsing Tdf values from BlazeSDK"
 
 edition.workspace = true
 license.workspace = true
