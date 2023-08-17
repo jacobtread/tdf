@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "tdf"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bitflags",
  "bytes",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "tdf-derive"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "darling",
  "quote",

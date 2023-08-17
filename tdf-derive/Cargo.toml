@@ -1,6 +1,7 @@
 [package]
 name = "tdf-derive"
-version = "0.1.0"
+version = "0.0.0"
+description = "Derive macros for working with tdfs"
 
 edition.workspace = true
 license.workspace = true
