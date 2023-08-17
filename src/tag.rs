@@ -1,5 +1,7 @@
 //! Implementation for [`Tag`]s and [`TdfType`]s
 
+use crate::{codec::Decodable, error::DecodeResult, reader::TdfReader};
+
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};
 
@@ -11,6 +13,35 @@ pub struct Tagged {
     pub tag: Tag,
     /// The Tdf type after this tag
     pub ty: TdfType,
+}
+
+impl Decodable for Tagged {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let input: [u8; 4] = r.read_bytes()?;
+        let ty: TdfType = TdfType::try_from(input[3])?;
+        let mut output: [u8; 4] = [0, 0, 0, 0];
+
+        output[0] |= (input[0] & 0x80) >> 1;
+        output[0] |= (input[0] & 0x40) >> 2;
+        output[0] |= (input[0] & 0x30) >> 2;
+        output[0] |= (input[0] & 0x0C) >> 2;
+
+        output[1] |= (input[0] & 0x02) << 5;
+        output[1] |= (input[0] & 0x01) << 4;
+        output[1] |= (input[1] & 0xF0) >> 4;
+
+        output[2] |= (input[1] & 0x08) << 3;
+        output[2] |= (input[1] & 0x04) << 2;
+        output[2] |= (input[1] & 0x03) << 2;
+        output[2] |= (input[2] & 0xC0) >> 6;
+
+        output[3] |= (input[2] & 0x20) << 1;
+        output[3] |= input[2] & 0x1F;
+
+        let tag = Tag(output);
+
+        Ok(Self { tag, ty })
+    }
 }
 
 /// Decoded tag bytes type

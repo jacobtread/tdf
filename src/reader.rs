@@ -61,18 +61,14 @@ impl<'a> TdfReader<'a> {
         Ok(byte)
     }
 
-    /// Attempts to take four bytes from the underlying buffer moving
-    /// the cursor over 4 bytes. This is used when decoding tags and
-    /// taking floats as they both require 4 bytes. Will return an
-    /// UnexpectedEof error if there is not 4 bytes after the cursor
-    fn read_byte_4(&mut self) -> DecodeResult<[u8; 4]> {
+    pub fn read_bytes<const N: usize>(&mut self) -> DecodeResult<[u8; N]> {
         // Ensure we have the required number of bytes
-        self.expect_length(4)?;
+        self.expect_length(N)?;
         // Alocate and copy the bytes from the buffer
-        let mut bytes: [u8; 4] = [0u8; 4];
-        bytes.copy_from_slice(&self.buffer[self.cursor..self.cursor + 4]);
+        let mut bytes: [u8; N] = [0; N];
+        bytes.copy_from_slice(&self.buffer[self.cursor..self.cursor + N]);
         // Move the cursor
-        self.cursor += 4;
+        self.cursor += N;
         Ok(bytes)
     }
 
@@ -97,7 +93,7 @@ impl<'a> TdfReader<'a> {
     /// Takes a float value from the buffer which moves the
     /// cursor over by 4 bytes
     pub fn read_f32(&mut self) -> DecodeResult<f32> {
-        let bytes: [u8; 4] = self.read_byte_4()?;
+        let bytes: [u8; 4] = self.read_bytes()?;
         Ok(f32::from_be_bytes(bytes))
     }
 
@@ -260,7 +256,7 @@ impl<'a> TdfReader<'a> {
     pub fn until_tag(&mut self, tag: &[u8], ty: TdfType) -> DecodeResult<()> {
         let tag = Tag::from(tag);
         loop {
-            let next_tag = match self.read_tag() {
+            let next_tag = match Tagged::decode(self) {
                 Ok(value) => value,
                 Err(DecodeError::UnexpectedEof { .. }) => {
                     return Err(DecodeError::MissingTag { tag, ty })
@@ -295,7 +291,7 @@ impl<'a> TdfReader<'a> {
         let tag = Tag::from(tag);
         let start = self.cursor;
 
-        while let Ok(next_tag) = self.read_tag() {
+        while let Ok(next_tag) = Tagged::decode(self) {
             if next_tag.tag != tag {
                 if self.skip_type(&next_tag.ty).is_err() {
                     break;
@@ -346,32 +342,40 @@ impl<'a> TdfReader<'a> {
         TdfType::try_from(value)
     }
 
-    /// Reads a tag from the underlying buffer
-    pub fn read_tag(&mut self) -> DecodeResult<Tagged> {
-        let input: [u8; 4] = self.read_byte_4()?;
-        let ty: TdfType = TdfType::try_from(input[3])?;
-        let mut output: [u8; 4] = [0, 0, 0, 0];
+    /// Skips the next tag value
+    pub fn skip(&mut self) -> DecodeResult<()> {
+        let tag = Tagged::decode(self)?;
+        self.skip_type(&tag.ty)
+    }
 
-        output[0] |= (input[0] & 0x80) >> 1;
-        output[0] |= (input[0] & 0x40) >> 2;
-        output[0] |= (input[0] & 0x30) >> 2;
-        output[0] |= (input[0] & 0x0C) >> 2;
-
-        output[1] |= (input[0] & 0x02) << 5;
-        output[1] |= (input[0] & 0x01) << 4;
-        output[1] |= (input[1] & 0xF0) >> 4;
-
-        output[2] |= (input[1] & 0x08) << 3;
-        output[2] |= (input[1] & 0x04) << 2;
-        output[2] |= (input[1] & 0x03) << 2;
-        output[2] |= (input[2] & 0xC0) >> 6;
-
-        output[3] |= (input[2] & 0x20) << 1;
-        output[3] |= input[2] & 0x1F;
-
-        let tag = Tag(output);
-
-        Ok(Tagged { tag, ty })
+    /// Skips a data type
+    ///
+    /// `ty` The type of data to skip
+    pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
+        match ty {
+            TdfType::VarInt => self.skip_var_int(),
+            TdfType::String | TdfType::Blob => self.skip_blob()?,
+            TdfType::Group => self.skip_group()?,
+            TdfType::List => self.skip_list()?,
+            TdfType::Map => self.skip_map()?,
+            TdfType::TaggedUnion => self.skip_union()?,
+            TdfType::VarIntList => self.skip_var_int_list()?,
+            TdfType::ObjectType => {
+                self.skip_var_int();
+                self.skip_var_int();
+            }
+            TdfType::ObjectId => {
+                self.skip_var_int();
+                self.skip_var_int();
+                self.skip_var_int();
+            }
+            TdfType::Float => self.skip_f32()?,
+            TdfType::U12 => {
+                self.read_slice(8)?;
+                self.skip_blob()?; // string
+            }
+        }
+        Ok(())
     }
 
     /// Skips the 4 bytes required for a 32 bit float value
@@ -460,42 +464,6 @@ impl<'a> TdfReader<'a> {
         let length: usize = self.read_usize()?;
         for _ in 0..length {
             self.skip_var_int();
-        }
-        Ok(())
-    }
-
-    /// Skips the next tag value
-    pub fn skip(&mut self) -> DecodeResult<()> {
-        let tag = self.read_tag()?;
-        self.skip_type(&tag.ty)
-    }
-
-    /// Skips a data type
-    ///
-    /// `ty` The type of data to skip
-    pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
-        match ty {
-            TdfType::VarInt => self.skip_var_int(),
-            TdfType::String | TdfType::Blob => self.skip_blob()?,
-            TdfType::Group => self.skip_group()?,
-            TdfType::List => self.skip_list()?,
-            TdfType::Map => self.skip_map()?,
-            TdfType::TaggedUnion => self.skip_union()?,
-            TdfType::VarIntList => self.skip_var_int_list()?,
-            TdfType::ObjectType => {
-                self.skip_var_int();
-                self.skip_var_int();
-            }
-            TdfType::ObjectId => {
-                self.skip_var_int();
-                self.skip_var_int();
-                self.skip_var_int();
-            }
-            TdfType::Float => self.skip_f32()?,
-            TdfType::U12 => {
-                self.read_slice(8)?;
-                self.skip_blob()?; // string
-            }
         }
         Ok(())
     }

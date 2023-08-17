@@ -4,7 +4,7 @@
 use crate::{
     error::DecodeResult,
     reader::TdfReader,
-    tag::TdfType,
+    tag::{Tagged, TdfType},
     types::{ObjectId, ObjectType, UNION_UNSET},
 };
 use std::fmt::write;
@@ -48,7 +48,7 @@ impl StringifyReader<'_> {
     }
 
     fn next_tag(&mut self, indent: usize) -> DecodeResult<()> {
-        let tagged = self.reader.read_tag()?;
+        let tagged = Tagged::decode(&mut self.reader)?;
 
         self.write_indent(indent);
 
@@ -202,10 +202,10 @@ impl StringifyReader<'_> {
         if ty == UNION_UNSET {
             self.out.push_str("Union(Unset)")
         } else {
-            let tag = self.reader.read_tag()?;
+            let tagged = Tagged::decode(&mut self.reader)?;
             self.out
-                .push_str(&format!("Union(\"{}\", {}, ", &tag.tag, ty));
-            self.next_type(indent + 1, &tag.ty)?;
+                .push_str(&format!("Union(\"{}\", {}, ", &tagged.tag, ty));
+            self.next_type(indent + 1, &tagged.ty)?;
             self.out.push(')')
         }
         Ok(())

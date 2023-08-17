@@ -1,6 +1,8 @@
 //! Types implementation for custom types used while encoding values
 //! with Blaze packets
 
+use crate::tag::Tagged;
+
 use super::{
     codec::{Decodable, Encodable, ValueType},
     error::{DecodeError, DecodeResult},
@@ -179,12 +181,12 @@ impl<C> Decodable for Union<C>
 where
     C: Decodable + ValueType,
 {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let key = reader.read_byte()?;
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let key = r.read_byte()?;
         if key == UNION_UNSET {
             return Ok(Union::Unset);
         }
-        let tag = reader.read_tag()?;
+        let tag = Tagged::decode(r)?;
         let expected_type = C::TYPE;
         let actual_type = tag.ty;
         if actual_type != expected_type {
@@ -193,7 +195,7 @@ where
                 actual: actual_type,
             });
         }
-        let value = C::decode(reader)?;
+        let value = C::decode(r)?;
 
         Ok(Union::Set {
             key,
