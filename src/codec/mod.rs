@@ -3,6 +3,8 @@
 
 use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfWriter};
 
+pub mod stringify;
+
 /// Trait for something that can be decoded from a TdfReader
 pub trait Decodable: Sized {
     /// Function for implementing decoding of Self from

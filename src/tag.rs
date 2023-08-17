@@ -5,6 +5,7 @@ use std::fmt::{Debug, Display, Write};
 
 /// Represents the tag for a tagged value. Contains the
 /// tag itself and the type of value stored after
+#[derive(Debug, PartialEq, Eq)]
 pub struct Tagged {
     /// The decoded tag
     pub tag: Tag,

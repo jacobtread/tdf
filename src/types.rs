@@ -8,9 +8,9 @@ use super::{
     tag::{Tag, TdfType},
     writer::TdfWriter,
 };
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::{borrow::Borrow, fmt::Display};
 use std::{slice, vec};
 
 /// List of Var ints
@@ -890,6 +890,12 @@ impl ValueType for ObjectType {
     const TYPE: TdfType = TdfType::ObjectType;
 }
 
+impl Display for ObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ObjectType({:#x}, {:#x})", self.component, self.ty)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ObjectId {
     /// The object type
@@ -915,6 +921,12 @@ impl Decodable for ObjectId {
 
 impl ValueType for ObjectId {
     const TYPE: TdfType = TdfType::ObjectId;
+}
+
+impl Display for ObjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ObjectId({}, {})", self.ty, self.id)
+    }
 }
 
 #[cfg(test)]
