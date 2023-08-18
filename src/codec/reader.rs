@@ -1,7 +1,7 @@
 //! Buffer reading wrapper to provided a way to easily read data from
 //! packet buffers provides easy functions for all the different tdf types
 
-use super::{
+use crate::{
     codec::{Decodable, ValueType},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},

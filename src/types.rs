@@ -1,15 +1,12 @@
 //! Types implementation for custom types used while encoding values
 //! with Blaze packets
 
-use crate::tag::Tagged;
-
 use super::{
-    codec::{Decodable, Encodable, ValueType},
+    codec::{reader::TdfReader, writer::TdfWriter, Decodable, Encodable, ValueType},
     error::{DecodeError, DecodeResult},
-    reader::TdfReader,
     tag::{Tag, TdfType},
-    writer::TdfWriter,
 };
+use crate::tag::Tagged;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{borrow::Borrow, fmt::Display};
@@ -632,7 +629,9 @@ macro_rules! forward_codec {
     ($a:ident, $b:ident) => {
         impl Decodable for $a {
             #[inline]
-            fn decode(reader: &mut $crate::reader::TdfReader) -> $crate::error::DecodeResult<Self> {
+            fn decode(
+                reader: &mut $crate::codec::reader::TdfReader,
+            ) -> $crate::error::DecodeResult<Self> {
                 Ok($b::decode(reader)? as $a)
             }
         }

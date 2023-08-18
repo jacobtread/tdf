@@ -1,6 +1,9 @@
 //! Implementation for [`Tag`]s and [`TdfType`]s
 
-use crate::{codec::Decodable, error::DecodeResult, reader::TdfReader};
+use crate::{
+    codec::{reader::TdfReader, Decodable},
+    error::DecodeResult,
+};
 
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};

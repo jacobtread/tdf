@@ -1,7 +1,7 @@
 //! Writer buffer implementation for writing different kinds of tdf values
 //! to byte form without creating a new structure [`TdfWriter`]
 
-use super::{
+use crate::{
     codec::{Encodable, ValueType},
     tag::TdfType,
     types::UNION_UNSET,
@@ -461,7 +461,11 @@ impl From<TdfWriter> for Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::TdfWriter;
-    use crate::{codec::Encodable, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
+    use crate::{
+        codec::{reader::TdfReader, Encodable},
+        tag::TdfType,
+        types::UNION_UNSET,
+    };
 
     /// Test for ensuring some common tags of different
     /// length are encoded to the correct values. The tags

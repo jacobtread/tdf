@@ -1,15 +1,12 @@
 //! Logic for converting tdf's into human readable string
 //! formats
 
+use super::{reader::TdfReader, Decodable};
 use crate::{
     error::DecodeResult,
-    reader::TdfReader,
     tag::{Tagged, TdfType},
     types::{ObjectId, ObjectType, UNION_UNSET},
 };
-use std::fmt::write;
-
-use super::Decodable;
 
 pub struct StringifyReader<'a> {
     pub reader: TdfReader<'a>,

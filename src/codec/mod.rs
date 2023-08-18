@@ -1,9 +1,13 @@
 //! Traits for implementing encoding ([`Encodable`]) and decoding ([`Decodable`])
 //! for different types and [`ValueType`] trait for specifying the Tdf type of a type
 
-use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfWriter};
+use super::{error::DecodeResult, tag::TdfType};
+use reader::TdfReader;
+use writer::TdfWriter;
 
+pub mod reader;
 pub mod stringify;
+pub mod writer;
 
 /// Trait for something that can be decoded from a TdfReader
 pub trait Decodable: Sized {

@@ -109,6 +109,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "serde",
+ "tdf-derive",
 ]
 
 [[package]]
