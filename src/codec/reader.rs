@@ -191,7 +191,7 @@ impl<'a> TdfReader<'a> {
     /// Reads a boolean value this is encoded using the
     /// var int encoding
     pub fn read_bool(&mut self) -> DecodeResult<bool> {
-        Ok(matches!(self.read_u8()?, 1))
+        Ok(self.read_u8()? == 1)
     }
 
     /// Reads a map from the underlying buffer

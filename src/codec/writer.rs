@@ -428,10 +428,7 @@ impl TdfWriter {
     /// except because the values are < 64 they are just directly
     /// appended as bytes
     pub fn write_bool(&mut self, value: bool) {
-        match value {
-            false => self.buffer.push(0),
-            true => self.buffer.push(1),
-        }
+        self.buffer.push(value as u8);
     }
 
     /// Writes the header for a map in order to begin writing map values
