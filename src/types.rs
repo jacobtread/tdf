@@ -203,11 +203,9 @@ where
     V: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("TdfMap {")?;
-        for (key, value) in self.iter() {
-            writeln!(f, "  {key:?}: {value:?}")?;
-        }
-        f.write_str("}")
+        let mut map = f.debug_map();
+        map.entries(self.iter());
+        map.finish()
     }
 }
 
