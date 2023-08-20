@@ -12,67 +12,18 @@ use std::fmt::Debug;
 use std::{borrow::Borrow, fmt::Display};
 use std::{slice, vec};
 
-/// List of Var ints
-#[derive(Debug, PartialEq, Eq)]
-pub struct VarIntList<T>(pub Vec<T>);
+/// List of variable length integers represented using
+/// a vec of u64 values
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct VarIntList(pub Vec<u64>);
 
-impl<T> Default for VarIntList<T> {
-    fn default() -> Self {
-        Self::new()
+impl VarIntList {
+    fn into_inner(self) -> Vec<u64> {
+        self.0
     }
 }
 
-impl<T> VarIntList<T> {
-    /// Creates a new VarIntList
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    /// Creates a new VarIntList with no capacity
-    pub fn empty() -> Self {
-        Self(Vec::with_capacity(0))
-    }
-
-    /// Creates a new VarIntList with the provided
-    /// capacity
-    ///
-    /// `capacity` The capacity for the underlying list
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self(Vec::with_capacity(capacity))
-    }
-
-    /// Pushes a new value into the underlying list
-    ///
-    /// `value` The value to push
-    pub fn push(&mut self, value: impl Into<T>) {
-        self.0.push(value.into())
-    }
-
-    /// Removes the value at the provided index and returns
-    /// the value stored at it if there is one
-    ///
-    /// `index` The index to remove
-    pub fn remove(&mut self, index: usize) -> Option<T> {
-        if index < self.0.len() {
-            Some(self.0.remove(index))
-        } else {
-            None
-        }
-    }
-
-    /// Retrieves the value at the provided index returning
-    /// a borrow if one is there
-    ///
-    /// `index` The index to get the value at
-    pub fn get(&mut self, index: usize) -> Option<&T> {
-        self.0.get(index)
-    }
-}
-
-impl<C> Encodable for VarIntList<C>
-where
-    C: VarInt,
-{
+impl Encodable for VarIntList {
     fn encode(&self, output: &mut TdfWriter) {
         output.write_usize(self.0.len());
         for value in &self.0 {
@@ -81,21 +32,18 @@ where
     }
 }
 
-impl<C> Decodable for VarIntList<C>
-where
-    C: VarInt,
-{
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let length = reader.read_usize()?;
+impl Decodable for VarIntList {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let length = r.read_usize()?;
         let mut out = Vec::with_capacity(length);
         for _ in 0..length {
-            out.push(C::decode(reader)?);
+            out.push(u64::decode(r)?);
         }
         Ok(VarIntList(out))
     }
 }
 
-impl<C> ValueType for VarIntList<C> {
+impl ValueType for VarIntList {
     const TYPE: TdfType = TdfType::VarIntList;
 }
 
