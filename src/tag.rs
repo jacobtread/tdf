@@ -137,3 +137,56 @@ impl TryFrom<u8> for TdfType {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{Tag, TdfType};
+
+    /// Tests that u8 values can be correctly converted
+    /// into tdf types
+    #[test]
+    fn test_u8_tdf_type() {
+        let types: [(u8, TdfType); 12] = [
+            (0x0, TdfType::VarInt),
+            (0x1, TdfType::String),
+            (0x2, TdfType::Blob),
+            (0x3, TdfType::Group),
+            (0x4, TdfType::List),
+            (0x5, TdfType::Map),
+            (0x6, TdfType::TaggedUnion),
+            (0x7, TdfType::VarIntList),
+            (0x8, TdfType::ObjectType),
+            (0x9, TdfType::ObjectId),
+            (0xA, TdfType::Float),
+            (0xC, TdfType::U12),
+        ];
+
+        for (value, expected) in types {
+            let ty = TdfType::try_from(value).unwrap();
+            assert_eq!(ty, expected);
+        }
+
+        for (expected, ty) in types {
+            let value = ty as u8;
+            assert_eq!(value, expected);
+        }
+    }
+
+    #[test]
+    fn test_tag_from_bytes() {
+        // Valid tag
+        let input = b"ABCD";
+        let tag = Tag::from(input);
+        assert_eq!(&tag.0, b"ABCD");
+
+        // Short tag should be zero padded
+        let input: &[u8] = b"AB";
+        let tag = Tag::from(input);
+        assert_eq!(&tag.0, b"AB\0\0");
+
+        // Empty tag should be zeroed
+        let input: &[u8] = &[];
+        let tag = Tag::from(input);
+        assert_eq!(&tag.0, b"\0\0\0\0");
+    }
+}
