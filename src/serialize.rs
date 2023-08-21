@@ -22,10 +22,7 @@ where
     }
 }
 
-impl<T> Serialize for VarIntList<T>
-where
-    T: Serialize,
-{
+impl Serialize for VarIntList {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
