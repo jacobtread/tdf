@@ -17,6 +17,15 @@ pub trait Decodable: Sized {
     ///
     /// `reader` The reader to decode from
     fn decode(r: &mut TdfReader) -> DecodeResult<Self>;
+
+    /// Decode this type without actually using the value,
+    /// default implementation is just to read the value
+    /// however for types that allocate heap space this can
+    /// be overriden to provide a zero heap allocation version
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        let _ = Self::decode(r)?;
+        Ok(())
+    }
 }
 
 /// Trait for something that can be encoded onto a TdfWriter

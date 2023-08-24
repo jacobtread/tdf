@@ -4,10 +4,10 @@
 use crate::{
     codec::{Decodable, ValueType},
     error::{DecodeError, DecodeResult},
+    prelude::{Blob, ObjectId, ObjectType, U12},
     tag::{Tag, Tagged, TdfType},
     types::{TdfMap, UNION_UNSET},
 };
-use std::borrow::Cow;
 
 /// Buffered readable implementation. Allows reading through the
 /// underlying slice using a cursor and with a position that can
@@ -90,13 +90,6 @@ impl<'a> TdfReader<'a> {
         Ok(slice)
     }
 
-    /// Takes a float value from the buffer which moves the
-    /// cursor over by 4 bytes
-    pub fn read_f32(&mut self) -> DecodeResult<f32> {
-        let bytes: [u8; 4] = self.read_bytes()?;
-        Ok(f32::from_be_bytes(bytes))
-    }
-
     /// Attempts to ensure the next length exists past the cursor
     /// will return an UnexpectedEof if there is not enough bytes
     ///
@@ -176,22 +169,6 @@ impl<'a> TdfReader<'a> {
         let length: usize = self.read_usize()?;
         let bytes: &[u8] = self.read_slice(length)?;
         Ok(bytes)
-    }
-
-    /// Reads a string from the underlying buffer
-    pub fn read_string(&mut self) -> DecodeResult<String> {
-        let bytes: &[u8] = self.read_blob()?;
-        let text: Cow<str> = String::from_utf8_lossy(bytes);
-        let mut text: String = text.to_string();
-        // Remove null terminator
-        text.pop();
-        Ok(text)
-    }
-
-    /// Reads a boolean value this is encoded using the
-    /// var int encoding
-    pub fn read_bool(&mut self) -> DecodeResult<bool> {
-        Ok(self.read_u8()? == 1)
     }
 
     /// Reads a map from the underlying buffer
@@ -354,40 +331,21 @@ impl<'a> TdfReader<'a> {
     pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
         match ty {
             TdfType::VarInt => self.skip_var_int(),
-            TdfType::String | TdfType::Blob => self.skip_blob()?,
+            TdfType::String | TdfType::Blob => Blob::skip(self)?,
             TdfType::Group => self.skip_group()?,
-            TdfType::List => self.skip_list()?,
+            TdfType::List => Vec::<u8>::skip(self)?,
             TdfType::Map => self.skip_map()?,
             TdfType::TaggedUnion => self.skip_union()?,
             TdfType::VarIntList => self.skip_var_int_list()?,
-            TdfType::ObjectType => {
-                self.skip_var_int();
-                self.skip_var_int();
-            }
-            TdfType::ObjectId => {
-                self.skip_var_int();
-                self.skip_var_int();
-                self.skip_var_int();
-            }
-            TdfType::Float => self.skip_f32()?,
-            TdfType::U12 => {
-                self.read_slice(8)?;
-                self.skip_blob()?; // string
-            }
+            TdfType::ObjectType => ObjectType::skip(self)?,
+            TdfType::ObjectId => ObjectId::skip(self)?,
+            TdfType::Float => f32::skip(self)?,
+            TdfType::U12 => U12::skip(self)?,
         }
         Ok(())
     }
 
-    /// Skips the 4 bytes required for a 32 bit float value
-    pub fn skip_f32(&mut self) -> DecodeResult<()> {
-        self.expect_length(4)?;
-        self.cursor += 4;
-        Ok(())
-    }
-
-    /// Skips the next string value
-    pub fn skip_blob(&mut self) -> DecodeResult<()> {
-        let length: usize = self.read_usize()?;
+    pub fn skip_length(&mut self, length: usize) -> DecodeResult<()> {
         self.expect_length(length)?;
         self.cursor += length;
         Ok(())

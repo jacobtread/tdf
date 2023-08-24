@@ -7,9 +7,9 @@ use super::{
     tag::{Tag, TdfType},
 };
 use crate::tag::Tagged;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{borrow::Borrow, fmt::Display};
+use std::{borrow::Cow, collections::HashMap};
 use std::{slice, vec};
 
 /// List of variable length integers represented using
@@ -18,7 +18,7 @@ use std::{slice, vec};
 pub struct VarIntList(pub Vec<u64>);
 
 impl VarIntList {
-    fn into_inner(self) -> Vec<u64> {
+    pub fn into_inner(self) -> Vec<u64> {
         self.0
     }
 }
@@ -515,9 +515,13 @@ impl Encodable for f32 {
 }
 
 impl Decodable for f32 {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_f32()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let bytes: [u8; 4] = r.read_bytes()?;
+        Ok(f32::from_be_bytes(bytes))
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        r.skip_length(4)
     }
 }
 
@@ -526,16 +530,15 @@ impl ValueType for f32 {
 }
 
 impl Encodable for bool {
-    #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_bool(*self)
+    fn encode(&self, w: &mut TdfWriter) {
+        w.write_u8(*self as u8);
     }
 }
 
 impl Decodable for bool {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_bool()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let value = u8::decode(r)?;
+        Ok(value == 1)
     }
 }
 
@@ -689,9 +692,17 @@ impl Encodable for String {
 }
 
 impl Decodable for String {
-    #[inline]
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_string()
+        let bytes: &[u8] = reader.read_blob()?;
+        let text: Cow<str> = String::from_utf8_lossy(bytes);
+        let mut text: String = text.to_string();
+        // Remove null terminator
+        text.pop();
+        Ok(text)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        Blob::skip(r)
     }
 }
 
@@ -713,10 +724,15 @@ impl Encodable for Blob {
 }
 
 impl Decodable for Blob {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let length = reader.read_usize()?;
-        let bytes = reader.read_slice(length)?;
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let length = r.read_usize()?;
+        let bytes = r.read_slice(length)?;
         Ok(Blob(bytes.to_vec()))
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        let length = r.read_usize()?;
+        r.skip_length(length)
     }
 }
 
@@ -731,11 +747,7 @@ where
     C: Encodable + ValueType,
 {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_type(C::TYPE);
-        writer.write_usize(self.len());
-        for value in self {
-            value.encode(writer);
-        }
+        self.as_slice().encode(writer);
     }
 }
 
@@ -764,8 +776,8 @@ impl<C> Decodable for Vec<C>
 where
     C: Decodable + ValueType,
 {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let value_type: TdfType = reader.read_type()?;
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let value_type: TdfType = r.read_type()?;
         let expected_type = C::TYPE;
         if value_type != expected_type {
             return Err(DecodeError::InvalidType {
@@ -774,12 +786,21 @@ where
             });
         }
 
-        let length = reader.read_usize()?;
+        let length = r.read_usize()?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
-            values.push(C::decode(reader)?);
+            values.push(C::decode(r)?);
         }
         Ok(values)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        let ty: TdfType = r.read_type()?;
+        let length = r.read_usize()?;
+        for _ in 0..length {
+            r.skip_type(&ty)?;
+        }
+        Ok(())
     }
 }
 
@@ -807,6 +828,11 @@ impl Decodable for ObjectType {
         let component = r.read_u16()?;
         let ty = r.read_u16()?;
         Ok(Self { component, ty })
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        u64::skip(r)?;
+        u64::skip(r)
     }
 }
 
@@ -841,6 +867,12 @@ impl Decodable for ObjectId {
         let id = r.read_u64()?;
         Ok(Self { ty, id })
     }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        ObjectType::skip(r)?;
+        u64::skip(r)?;
+        Ok(())
+    }
 }
 
 impl ValueType for ObjectId {
@@ -850,6 +882,31 @@ impl ValueType for ObjectId {
 impl Display for ObjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ObjectId({}, {})", self.ty, self.id)
+    }
+}
+
+pub struct U12 {
+    pub data: [u8; 8],
+    pub value: String,
+}
+
+impl Encodable for U12 {
+    fn encode(&self, w: &mut TdfWriter) {
+        w.write_slice(&self.data);
+        self.value.encode(w);
+    }
+}
+
+impl Decodable for U12 {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let data: [u8; 8] = r.read_bytes()?;
+        let value = String::decode(r)?;
+        Ok(U12 { data, value })
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        r.skip_length(8)?;
+        String::skip(r)
     }
 }
 

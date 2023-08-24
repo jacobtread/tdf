@@ -85,7 +85,7 @@ impl StringifyReader<'_> {
     }
 
     fn next_string(&mut self) -> DecodeResult<()> {
-        let value = self.reader.read_string()?;
+        let value = String::decode(&mut self.reader)?;
         self.out.push('"');
         self.out.push_str(&value);
         self.out.push('"');
@@ -234,7 +234,7 @@ impl StringifyReader<'_> {
     }
 
     fn next_float(&mut self) -> DecodeResult<()> {
-        let value = self.reader.read_f32()?;
+        let value = f32::decode(&mut self.reader)?;
         self.out.push_str(&value.to_string());
         Ok(())
     }

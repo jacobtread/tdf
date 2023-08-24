@@ -460,6 +460,7 @@ mod test {
     use super::TdfWriter;
     use crate::{
         codec::{reader::TdfReader, Encodable},
+        prelude::Decodable,
         tag::TdfType,
         types::UNION_UNSET,
     };
@@ -940,7 +941,7 @@ mod test {
         assert_eq!(&writer.buffer[length_bytes.len()..], TEXT_BYTES);
 
         let mut reader = TdfReader::new(&writer.buffer);
-        let value: String = reader.read_string().unwrap();
+        let value: String = String::decode(&mut reader).unwrap();
 
         assert_eq!(value, TEXT)
     }
