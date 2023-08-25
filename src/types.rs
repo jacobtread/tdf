@@ -41,6 +41,14 @@ impl Decodable for VarIntList {
         }
         Ok(VarIntList(out))
     }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        let length: usize = usize::decode(r)?;
+        for _ in 0..length {
+            u64::skip(r)?;
+        }
+        Ok(())
+    }
 }
 
 impl ValueType for VarIntList {
@@ -122,6 +130,24 @@ where
     }
 }
 
+/// Placeholder type used for skipping on fields on types
+/// with generics type parameters
+pub(crate) struct SkipType;
+
+impl Decodable for SkipType {
+    fn decode(_: &mut TdfReader) -> DecodeResult<Self> {
+        Ok(SkipType)
+    }
+
+    fn skip(_: &mut TdfReader) -> DecodeResult<()> {
+        Ok(())
+    }
+}
+
+impl ValueType for SkipType {
+    const TYPE: TdfType = TdfType::String;
+}
+
 impl<C> Decodable for Union<C>
 where
     C: Decodable + ValueType,
@@ -147,6 +173,14 @@ where
             tag: tag.tag,
             value,
         })
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        let ty = r.read_byte()?;
+        if ty != UNION_UNSET {
+            r.skip()?;
+        }
+        Ok(())
     }
 }
 
@@ -463,33 +497,93 @@ impl<K, V, B: Into<K>, A: Into<V>> FromIterator<(B, A)> for TdfMap<K, V> {
     }
 }
 
-impl<K, V> Encodable for TdfMap<K, V>
-where
-    K: Encodable + ValueType,
-    V: Encodable + ValueType,
-{
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_map_header(K::TYPE, V::TYPE, self.len());
-
-        for MapEntry { key, value } in &self.entries {
-            key.encode(output);
-            value.encode(output);
-        }
-    }
-}
-
 impl<K, V> Decodable for TdfMap<K, V>
 where
     K: Decodable + ValueType,
     V: Decodable + ValueType,
 {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        r.read_map()
+        let header = TdfMapHeader::decode(r)?;
+
+        if K::TYPE != header.key {
+            return Err(DecodeError::InvalidType {
+                expected: K::TYPE,
+                actual: header.key,
+            });
+        }
+
+        if V::TYPE != header.value {
+            return Err(DecodeError::InvalidType {
+                expected: V::TYPE,
+                actual: header.value,
+            });
+        }
+
+        let mut map: TdfMap<K, V> = TdfMap::with_capacity(header.length);
+        for _ in 0..header.length {
+            let key: K = K::decode(r)?;
+            let value: V = V::decode(r)?;
+            map.insert(key, value);
+        }
+
+        Ok(map)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        let header = TdfMapHeader::decode(r)?;
+        for _ in 0..header.length {
+            r.skip_type(&header.key)?;
+            r.skip_type(&header.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl<K, V> Encodable for TdfMap<K, V>
+where
+    K: Encodable + ValueType,
+    V: Encodable + ValueType,
+{
+    fn encode(&self, w: &mut TdfWriter) {
+        TdfMapHeader {
+            key: K::TYPE,
+            value: V::TYPE,
+            length: self.len(),
+        }
+        .encode(w);
+
+        for MapEntry { key, value } in &self.entries {
+            key.encode(w);
+            value.encode(w);
+        }
     }
 }
 
 impl<K, V> ValueType for TdfMap<K, V> {
     const TYPE: TdfType = TdfType::Map;
+}
+
+pub struct TdfMapHeader {
+    pub key: TdfType,
+    pub value: TdfType,
+    pub length: usize,
+}
+
+impl Decodable for TdfMapHeader {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let key: TdfType = TdfType::decode(r)?;
+        let value: TdfType = TdfType::decode(r)?;
+        let length = usize::decode(r)?;
+        Ok(Self { key, value, length })
+    }
+}
+
+impl Encodable for TdfMapHeader {
+    fn encode(&self, w: &mut TdfWriter) {
+        self.key.encode(w);
+        self.value.encode(w);
+        self.length.encode(w);
+    }
 }
 
 /// Implementation for converting a HashMap to a TdfMap by taking

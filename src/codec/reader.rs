@@ -4,9 +4,9 @@
 use crate::{
     codec::{Decodable, ValueType},
     error::{DecodeError, DecodeResult},
-    prelude::{Blob, ObjectId, ObjectType, U12},
+    prelude::{Blob, ObjectId, ObjectType, SkipType, TdfMapHeader, Union, VarIntList, U12},
     tag::{Tag, Tagged, TdfType},
-    types::{TdfMap, UNION_UNSET},
+    types::TdfMap,
 };
 
 /// Buffered readable implementation. Allows reading through the
@@ -99,59 +99,6 @@ impl<'a> TdfReader<'a> {
         let length: usize = usize::decode(self)?;
         let bytes: &[u8] = self.read_slice(length)?;
         Ok(bytes)
-    }
-
-    /// Reads a map from the underlying buffer
-    pub fn read_map<K: Decodable + ValueType, V: Decodable + ValueType>(
-        &mut self,
-    ) -> DecodeResult<TdfMap<K, V>> {
-        let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
-        self.read_map_body(length)
-    }
-
-    /// Reads a map header from the underlying buffer ensuring that the key
-    /// and value types match the provided key and value types. Returns
-    /// the length of the following content
-    ///
-    /// `exp_key_type`   The type of key to expect
-    /// `exp_value_type` The type of value to expect
-    pub fn read_map_header(
-        &mut self,
-        exp_key_type: TdfType,
-        exp_value_type: TdfType,
-    ) -> DecodeResult<usize> {
-        let key_type: TdfType = TdfType::decode(self)?;
-        if key_type != exp_key_type {
-            return Err(DecodeError::InvalidType {
-                expected: exp_key_type,
-                actual: key_type,
-            });
-        }
-        let value_type: TdfType = TdfType::decode(self)?;
-        if value_type != exp_value_type {
-            return Err(DecodeError::InvalidType {
-                expected: exp_value_type,
-                actual: value_type,
-            });
-        }
-        usize::decode(self)
-    }
-
-    /// Reads the contents of the map for the provided key value types
-    /// and for the provided length
-    ///
-    /// `length` The length of the map (The number of entries)
-    pub fn read_map_body<K: Decodable, V: Decodable>(
-        &mut self,
-        length: usize,
-    ) -> DecodeResult<TdfMap<K, V>> {
-        let mut map: TdfMap<K, V> = TdfMap::with_capacity(length);
-        for _ in 0..length {
-            let key: K = K::decode(self)?;
-            let value: V = V::decode(self)?;
-            map.insert(key, value);
-        }
-        Ok(map)
     }
 
     /// Decodes tags from the reader until the tag with the provided tag name
@@ -257,10 +204,10 @@ impl<'a> TdfReader<'a> {
             TdfType::VarInt => u64::skip(self)?,
             TdfType::String | TdfType::Blob => Blob::skip(self)?,
             TdfType::Group => self.skip_group()?,
-            TdfType::List => Vec::<u8>::skip(self)?,
-            TdfType::Map => self.skip_map()?,
-            TdfType::TaggedUnion => self.skip_union()?,
-            TdfType::VarIntList => self.skip_var_int_list()?,
+            TdfType::List => Vec::<SkipType>::skip(self)?,
+            TdfType::Map => TdfMap::<SkipType, SkipType>::skip(self)?,
+            TdfType::TaggedUnion => Union::<SkipType>::skip(self)?,
+            TdfType::VarIntList => VarIntList::skip(self)?,
             TdfType::ObjectType => ObjectType::skip(self)?,
             TdfType::ObjectId => ObjectId::skip(self)?,
             TdfType::Float => f32::skip(self)?,
@@ -309,36 +256,6 @@ impl<'a> TdfReader<'a> {
         Ok(())
     }
 
-    /// Skips a map
-    pub fn skip_map(&mut self) -> DecodeResult<()> {
-        let key_ty: TdfType = TdfType::decode(self)?;
-        let value_ty: TdfType = TdfType::decode(self)?;
-        let length: usize = usize::decode(self)?;
-        for _ in 0..length {
-            self.skip_type(&key_ty)?;
-            self.skip_type(&value_ty)?;
-        }
-        Ok(())
-    }
-
-    /// Skips a union value
-    pub fn skip_union(&mut self) -> DecodeResult<()> {
-        let ty = self.read_byte()?;
-        if ty != UNION_UNSET {
-            self.skip()?;
-        }
-        Ok(())
-    }
-
-    /// Skips a var int list
-    pub fn skip_var_int_list(&mut self) -> DecodeResult<()> {
-        let length: usize = usize::decode(self)?;
-        for _ in 0..length {
-            u64::skip(self)?;
-        }
-        Ok(())
-    }
-
     /// Reads until the next list values selection for the provided
     /// tag. Will read the value type and the length returning
     /// the length.
@@ -373,24 +290,22 @@ impl<'a> TdfReader<'a> {
     ) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::Map)?;
 
-        let k_type = TdfType::decode(self)?;
-        let v_type = TdfType::decode(self)?;
+        let header = TdfMapHeader::decode(self)?;
 
-        if k_type != key_type {
+        if header.key != key_type {
             return Err(DecodeError::InvalidType {
                 expected: key_type,
-                actual: k_type,
+                actual: header.key,
             });
         }
 
-        if v_type != value_type {
+        if header.value != value_type {
             return Err(DecodeError::InvalidType {
                 expected: value_type,
-                actual: v_type,
+                actual: header.value,
             });
         }
 
-        let count = usize::decode(self)?;
-        Ok(count)
+        Ok(header.length)
     }
 }

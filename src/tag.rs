@@ -3,6 +3,7 @@
 use crate::{
     codec::{reader::TdfReader, Decodable},
     error::DecodeResult,
+    prelude::Encodable,
 };
 
 use super::error::DecodeError;
@@ -119,6 +120,18 @@ impl Decodable for TdfType {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
         let value = r.read_byte()?;
         TdfType::try_from(value)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        r.read_byte()?;
+        Ok(())
+    }
+}
+
+impl Encodable for TdfType {
+    fn encode(&self, w: &mut crate::prelude::TdfWriter) {
+        let value = *self as u8;
+        w.write_byte(value);
     }
 }
 
