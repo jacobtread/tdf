@@ -120,7 +120,8 @@ impl TdfWriter {
     /// `value` The value to write
     pub fn tag_u8(&mut self, tag: &[u8], value: u8) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u8(value);
+
+        u8::encode(&value, self);
     }
 
     /// Writes a new tag where the value is a u16 value using
@@ -130,7 +131,7 @@ impl TdfWriter {
     /// `value` The value to write
     pub fn tag_u16(&mut self, tag: &[u8], value: u16) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u16(value);
+        u16::encode(&value, self);
     }
 
     /// Writes a new tag where the value is a u32 value using
@@ -140,7 +141,7 @@ impl TdfWriter {
     /// `value` The value to write
     pub fn tag_u32(&mut self, tag: &[u8], value: u32) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u32(value);
+        u32::encode(&value, self);
     }
 
     /// Writes a new tag where the value is a u64 value using
@@ -150,7 +151,7 @@ impl TdfWriter {
     /// `value` The value to write
     pub fn tag_u64(&mut self, tag: &[u8], value: u64) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u64(value);
+        u64::encode(&value, self);
     }
 
     /// Writes a new tag where the value is a usize value using
@@ -160,7 +161,7 @@ impl TdfWriter {
     /// `value` The value to write
     pub fn tag_usize(&mut self, tag: &[u8], value: usize) {
         self.tag(tag, TdfType::VarInt);
-        self.write_usize(value);
+        usize::encode(&value, self);
     }
 
     /// Writes a new tag where the value is an empty string
@@ -224,8 +225,8 @@ impl TdfWriter {
     /// `length` The number of items that will be written
     pub fn tag_list_start(&mut self, tag: &[u8], ty: TdfType, length: usize) {
         self.tag(tag, TdfType::List);
-        self.write_type(ty);
-        self.write_usize(length);
+        ty.encode(self);
+        length.encode(self);
     }
 
     /// Writes a new tag indicating that a union with the provided key is
@@ -306,9 +307,9 @@ impl TdfWriter {
     /// `length` The total number of entires that will be written
     pub fn tag_map_start(&mut self, tag: &[u8], key: TdfType, value: TdfType, length: usize) {
         self.tag(tag, TdfType::Map);
-        self.write_type(key);
-        self.write_type(value);
-        self.write_usize(length);
+        key.encode(self);
+        value.encode(self);
+        length.encode(self);
     }
 
     /// Writes a list of tuples as a map of key value paris
@@ -329,43 +330,21 @@ impl TdfWriter {
 
     pub fn tag_object_type(&mut self, tag: &[u8], component: u16, ty: u16) {
         self.tag(tag, TdfType::ObjectType);
-        self.write_u16(component);
-        self.write_u16(ty);
+        component.encode(self);
+        ty.encode(self);
     }
 
     pub fn tag_object_id(&mut self, tag: &[u8], component: u16, ty: u16, id: u64) {
         self.tag(tag, TdfType::ObjectId);
-        self.write_u16(component);
-        self.write_u16(ty);
-        self.write_u64(id);
+        component.encode(self);
+        ty.encode(self);
+        id.encode(self);
     }
 
     /// Writes an empty string. This is simply two bytes a 1 and a 0 which
     /// indicate a string consisting of only a null terminator
     pub fn write_empty_str(&mut self) {
         self.buffer.extend_from_slice(&[1, 0])
-    }
-
-    /// Writes 32 bit float value to the underlying buffer in
-    /// big-endian byte order.
-    ///
-    /// `value` The float value to write
-    pub fn write_f32(&mut self, value: f32) {
-        let bytes: [u8; 4] = value.to_be_bytes();
-        self.buffer.extend_from_slice(&bytes);
-    }
-
-    /// Writes a u8 value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_u8(&mut self, value: u8) {
-        // Values < 64 are directly appended to buffer
-        if value < 64 {
-            self.buffer.push(value);
-            return;
-        }
-        self.buffer.push((value & 63) | 128);
-        self.buffer.push(value >> 6);
     }
 
     /// Writes a u16 value using the VarInt encoding
@@ -383,20 +362,6 @@ impl TdfWriter {
         shift >>= 7;
         self.buffer.push(byte);
         self.buffer.push(shift as u8);
-    }
-
-    /// Writes a u32 value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_u32(&mut self, value: u32) {
-        impl_encode_var!(value, self);
-    }
-
-    /// Writes a u64 value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_u64(&mut self, value: u64) {
-        impl_encode_var!(value, self);
     }
 
     /// Writes a usize value using the VarInt encoding
@@ -437,9 +402,9 @@ impl TdfWriter {
     /// `value_type` The type of the map values
     /// `length`     The total number of items that will be written
     pub fn write_map_header(&mut self, key_type: TdfType, value_type: TdfType, length: usize) {
-        self.write_type(key_type);
-        self.write_type(value_type);
-        self.write_usize(length);
+        key_type.encode(self);
+        value_type.encode(self);
+        length.encode(self);
     }
 
     /// Clears the contents of the underlying buffer
@@ -827,7 +792,8 @@ mod test {
         let mut value: f32 = 1.0;
         while value < f32::MAX {
             let expected = value.to_be_bytes();
-            writer.write_f32(value);
+
+            value.encode(&mut writer);
             assert_eq!(&writer.buffer, &expected);
             writer.clear();
             value *= 2.0;
@@ -839,7 +805,8 @@ mod test {
     fn test_write_u8() {
         let mut writer = TdfWriter::default();
         for value in u8::MIN..u8::MAX {
-            writer.write_u8(value);
+            value.encode(&mut writer);
+
             let mut reader = TdfReader::new(&writer.buffer);
             let decoded: u8 = u8::decode(&mut reader).expect("Failed to decode tag u8 value");
             assert_eq!(value, decoded);
@@ -854,7 +821,8 @@ mod test {
     fn test_write_u16() {
         let mut writer = TdfWriter::default();
         for value in u16::MIN..u16::MAX {
-            writer.write_u16(value);
+            value.encode(&mut writer);
+
             let mut reader = TdfReader::new(&writer.buffer);
             let decoded: u16 = u16::decode(&mut reader).expect("Failed to decode tag u16 value");
             assert_eq!(value, decoded);
@@ -869,7 +837,7 @@ mod test {
     fn test_write_u32() {
         let mut writer = TdfWriter::default();
         for value in (u32::MAX - 65535)..u32::MAX {
-            writer.write_u32(value);
+            value.encode(&mut writer);
             let mut reader = TdfReader::new(&writer.buffer);
             let decoded: u32 = u32::decode(&mut reader).expect("Failed to decode tag u32 value");
             assert_eq!(value, decoded);
@@ -884,7 +852,7 @@ mod test {
     fn test_write_u64() {
         let mut writer = TdfWriter::default();
         for value in (u64::MAX - 65535)..u64::MAX {
-            writer.write_u64(value);
+            value.encode(&mut writer);
             let mut reader = TdfReader::new(&writer.buffer);
             let decoded: u64 = u64::decode(&mut reader).expect("Failed to decode tag u64 value");
             assert_eq!(value, decoded);
@@ -899,7 +867,7 @@ mod test {
     fn test_write_usize() {
         let mut writer = TdfWriter::default();
         for value in (usize::MAX - 65535)..usize::MAX {
-            writer.write_usize(value);
+            value.encode(&mut writer);
             let mut reader = TdfReader::new(&writer.buffer);
             let decoded: usize =
                 usize::decode(&mut reader).expect("Failed to decode tag usize value");

@@ -603,7 +603,8 @@ impl<K, V> From<HashMap<K, V>> for TdfMap<K, V> {
 impl Encodable for f32 {
     #[inline]
     fn encode(&self, output: &mut TdfWriter) {
-        output.write_f32(*self)
+        let bytes: [u8; 4] = (*self).to_be_bytes();
+        output.buffer.extend_from_slice(&bytes);
     }
 }
 
@@ -624,7 +625,7 @@ impl ValueType for f32 {
 
 impl Encodable for bool {
     fn encode(&self, w: &mut TdfWriter) {
-        w.write_u8(*self as u8);
+        (*self as u8).encode(w);
     }
 }
 
@@ -671,9 +672,15 @@ macro_rules! forward_codec {
 // Encoding for u8 values
 
 impl Encodable for u8 {
-    #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_u8(*self)
+    fn encode(&self, w: &mut TdfWriter) {
+        let value = *self;
+        // Values < 64 are directly appended to buffer
+        if value < 64 {
+            w.buffer.push(value);
+            return;
+        }
+        w.buffer.push((value & 63) | 128);
+        w.buffer.push(value >> 6);
     }
 }
 
@@ -703,7 +710,18 @@ impl Decodable for u8 {
 
 impl Encodable for u16 {
     fn encode(&self, w: &mut TdfWriter) {
-        (*self as u64).encode(w)
+        let value = *self;
+        if value < 64 {
+            w.buffer.push(value as u8);
+            return;
+        }
+        let mut byte: u8 = ((value & 63) as u8) | 128;
+        let mut shift: u16 = value >> 6;
+        w.buffer.push(byte);
+        byte = ((shift & 127) | 128) as u8;
+        shift >>= 7;
+        w.buffer.push(byte);
+        w.buffer.push(shift as u8);
     }
 }
 
@@ -1024,7 +1042,7 @@ pub struct ObjectId {
 impl Encodable for ObjectId {
     fn encode(&self, w: &mut TdfWriter) {
         self.ty.encode(w);
-        w.write_u64(self.id);
+        self.id.encode(w);
     }
 }
 
