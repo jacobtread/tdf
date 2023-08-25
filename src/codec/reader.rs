@@ -21,29 +21,6 @@ pub struct TdfReader<'a> {
     pub cursor: usize,
 }
 
-/// Macro for implementing VarInt decoding for a specific number type
-/// to prevent allocating for a u64 for every other number type
-macro_rules! impl_decode_var {
-    ($ty:ty, $reader:ident) => {{
-        let first: u8 = $reader.read_byte()?;
-        let mut result: $ty = (first & 63) as $ty;
-        if first < 128 {
-            return Ok(result);
-        }
-        let mut shift: u8 = 6;
-        let mut byte: u8;
-        loop {
-            byte = $reader.read_byte()?;
-            result |= ((byte & 127) as $ty) << shift;
-            if byte < 128 {
-                break;
-            }
-            shift += 7;
-        }
-        Ok(result)
-    }};
-}
-
 impl<'a> TdfReader<'a> {
     /// Creates a new reader over the provided slice of bytes with
     /// the default cursor position at zero
@@ -116,57 +93,10 @@ impl<'a> TdfReader<'a> {
         self.cursor >= self.buffer.len()
     }
 
-    /// Decodes a u8 value using the VarInt encoding
-    pub fn read_u8(&mut self) -> DecodeResult<u8> {
-        let first: u8 = self.read_byte()?;
-        let mut result: u8 = first & 63;
-        // Values less than 128 are already complete and don't need more reading
-        if first < 128 {
-            return Ok(result);
-        }
-
-        let byte: u8 = self.read_byte()?;
-        result |= (byte & 127) << 6;
-
-        // Consume remaining unused VarInt data. We only wanted a u8
-        if byte >= 128 {
-            self.skip_var_int();
-        }
-        Ok(result)
-    }
-
-    /// Decodes a u16 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_u16(&mut self) -> DecodeResult<u16> {
-        impl_decode_var!(u16, self)
-    }
-
-    /// Decodes a u32 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_u32(&mut self) -> DecodeResult<u32> {
-        impl_decode_var!(u32, self)
-    }
-
-    /// Decodes a u64 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_u64(&mut self) -> DecodeResult<u64> {
-        impl_decode_var!(u64, self)
-    }
-
-    /// Decodes a u64 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_usize(&mut self) -> DecodeResult<usize> {
-        impl_decode_var!(usize, self)
-    }
-
     /// Reads a blob from the buffer. The blob is a slice prefixed
     /// by a length value
     pub fn read_blob(&mut self) -> DecodeResult<&[u8]> {
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::decode(self)?;
         let bytes: &[u8] = self.read_slice(length)?;
         Ok(bytes)
     }
@@ -190,21 +120,21 @@ impl<'a> TdfReader<'a> {
         exp_key_type: TdfType,
         exp_value_type: TdfType,
     ) -> DecodeResult<usize> {
-        let key_type: TdfType = self.read_type()?;
+        let key_type: TdfType = TdfType::decode(self)?;
         if key_type != exp_key_type {
             return Err(DecodeError::InvalidType {
                 expected: exp_key_type,
                 actual: key_type,
             });
         }
-        let value_type: TdfType = self.read_type()?;
+        let value_type: TdfType = TdfType::decode(self)?;
         if value_type != exp_value_type {
             return Err(DecodeError::InvalidType {
                 expected: exp_value_type,
                 actual: value_type,
             });
         }
-        self.read_usize()
+        usize::decode(self)
     }
 
     /// Reads the contents of the map for the provided key value types
@@ -313,12 +243,6 @@ impl<'a> TdfReader<'a> {
         }
     }
 
-    /// Reads the next TdfType value after the cursor
-    pub fn read_type(&mut self) -> DecodeResult<TdfType> {
-        let value = self.read_byte()?;
-        TdfType::try_from(value)
-    }
-
     /// Skips the next tag value
     pub fn skip(&mut self) -> DecodeResult<()> {
         let tag = Tagged::decode(self)?;
@@ -330,7 +254,7 @@ impl<'a> TdfReader<'a> {
     /// `ty` The type of data to skip
     pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
         match ty {
-            TdfType::VarInt => self.skip_var_int(),
+            TdfType::VarInt => u64::skip(self)?,
             TdfType::String | TdfType::Blob => Blob::skip(self)?,
             TdfType::Group => self.skip_group()?,
             TdfType::List => Vec::<u8>::skip(self)?,
@@ -349,17 +273,6 @@ impl<'a> TdfReader<'a> {
         self.expect_length(length)?;
         self.cursor += length;
         Ok(())
-    }
-
-    /// Skips the next var int value
-    pub fn skip_var_int(&mut self) {
-        while self.cursor < self.buffer.len() {
-            let byte = self.buffer[self.cursor];
-            self.cursor += 1;
-            if byte < 128 {
-                break;
-            }
-        }
     }
 
     /// Skips the starting 2 value at the beggining of the group
@@ -388,8 +301,8 @@ impl<'a> TdfReader<'a> {
 
     /// Skips a list of items
     pub fn skip_list(&mut self) -> DecodeResult<()> {
-        let ty: TdfType = self.read_type()?;
-        let length: usize = self.read_usize()?;
+        let ty: TdfType = TdfType::decode(self)?;
+        let length: usize = usize::decode(self)?;
         for _ in 0..length {
             self.skip_type(&ty)?;
         }
@@ -398,9 +311,9 @@ impl<'a> TdfReader<'a> {
 
     /// Skips a map
     pub fn skip_map(&mut self) -> DecodeResult<()> {
-        let key_ty: TdfType = self.read_type()?;
-        let value_ty: TdfType = self.read_type()?;
-        let length: usize = self.read_usize()?;
+        let key_ty: TdfType = TdfType::decode(self)?;
+        let value_ty: TdfType = TdfType::decode(self)?;
+        let length: usize = usize::decode(self)?;
         for _ in 0..length {
             self.skip_type(&key_ty)?;
             self.skip_type(&value_ty)?;
@@ -419,9 +332,9 @@ impl<'a> TdfReader<'a> {
 
     /// Skips a var int list
     pub fn skip_var_int_list(&mut self) -> DecodeResult<()> {
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::decode(self)?;
         for _ in 0..length {
-            self.skip_var_int();
+            u64::skip(self)?;
         }
         Ok(())
     }
@@ -434,14 +347,14 @@ impl<'a> TdfReader<'a> {
     /// `value_type` The expected value type
     pub fn until_list(&mut self, tag: &[u8], value_type: TdfType) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::List)?;
-        let list_type = self.read_type()?;
+        let list_type = TdfType::decode(self)?;
         if list_type != value_type {
             return Err(DecodeError::InvalidType {
                 expected: value_type,
                 actual: list_type,
             });
         }
-        let count = self.read_usize()?;
+        let count = usize::decode(self)?;
         Ok(count)
     }
 
@@ -460,8 +373,8 @@ impl<'a> TdfReader<'a> {
     ) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::Map)?;
 
-        let k_type = self.read_type()?;
-        let v_type = self.read_type()?;
+        let k_type = TdfType::decode(self)?;
+        let v_type = TdfType::decode(self)?;
 
         if k_type != key_type {
             return Err(DecodeError::InvalidType {
@@ -477,24 +390,7 @@ impl<'a> TdfReader<'a> {
             });
         }
 
-        let count = self.read_usize()?;
+        let count = usize::decode(self)?;
         Ok(count)
-    }
-}
-
-/// Majority of reading tests are merged into the writing tests
-#[cfg(test)]
-mod test {
-    use super::TdfReader;
-
-    /// Tests reading a byte from the reader
-    #[test]
-    fn test_read_byte() {
-        for value in 0..255 {
-            let buffer = &[value];
-            let mut reader = TdfReader::new(buffer);
-            let read_value = reader.read_byte().unwrap();
-            assert_eq!(value, read_value);
-        }
     }
 }

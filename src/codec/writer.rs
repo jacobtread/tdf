@@ -841,7 +841,7 @@ mod test {
         for value in u8::MIN..u8::MAX {
             writer.write_u8(value);
             let mut reader = TdfReader::new(&writer.buffer);
-            let decoded: u8 = reader.read_u8().expect("Failed to decode tag u8 value");
+            let decoded: u8 = u8::decode(&mut reader).expect("Failed to decode tag u8 value");
             assert_eq!(value, decoded);
             writer.clear();
         }
@@ -856,7 +856,7 @@ mod test {
         for value in u16::MIN..u16::MAX {
             writer.write_u16(value);
             let mut reader = TdfReader::new(&writer.buffer);
-            let decoded: u16 = reader.read_u16().expect("Failed to decode tag u16 value");
+            let decoded: u16 = u16::decode(&mut reader).expect("Failed to decode tag u16 value");
             assert_eq!(value, decoded);
             writer.clear();
         }
@@ -871,7 +871,7 @@ mod test {
         for value in (u32::MAX - 65535)..u32::MAX {
             writer.write_u32(value);
             let mut reader = TdfReader::new(&writer.buffer);
-            let decoded: u32 = reader.read_u32().expect("Failed to decode tag u32 value");
+            let decoded: u32 = u32::decode(&mut reader).expect("Failed to decode tag u32 value");
             assert_eq!(value, decoded);
             writer.clear();
         }
@@ -886,7 +886,7 @@ mod test {
         for value in (u64::MAX - 65535)..u64::MAX {
             writer.write_u64(value);
             let mut reader = TdfReader::new(&writer.buffer);
-            let decoded: u64 = reader.read_u64().expect("Failed to decode tag u64 value");
+            let decoded: u64 = u64::decode(&mut reader).expect("Failed to decode tag u64 value");
             assert_eq!(value, decoded);
             writer.clear();
         }
@@ -901,9 +901,8 @@ mod test {
         for value in (usize::MAX - 65535)..usize::MAX {
             writer.write_usize(value);
             let mut reader = TdfReader::new(&writer.buffer);
-            let decoded: usize = reader
-                .read_usize()
-                .expect("Failed to decode tag usize value");
+            let decoded: usize =
+                usize::decode(&mut reader).expect("Failed to decode tag usize value");
             assert_eq!(value, decoded);
             writer.clear();
         }

@@ -34,7 +34,7 @@ impl Encodable for VarIntList {
 
 impl Decodable for VarIntList {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let length = r.read_usize()?;
+        let length = usize::decode(r)?;
         let mut out = Vec::with_capacity(length);
         for _ in 0..length {
             out.push(u64::decode(r)?);
@@ -483,9 +483,8 @@ where
     K: Decodable + ValueType,
     V: Decodable + ValueType,
 {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_map()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        r.read_map()
     }
 }
 
@@ -585,65 +584,139 @@ impl Encodable for u8 {
 }
 
 impl Decodable for u8 {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_u8()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let first: u8 = r.read_byte()?;
+        let mut result: u8 = first & 63;
+        // Values less than 128 are already complete and don't need more reading
+        if first < 128 {
+            return Ok(result);
+        }
+
+        let byte: u8 = r.read_byte()?;
+        result |= (byte & 127) << 6;
+
+        // Consume remaining unused VarInt data. We only wanted a u8
+        if byte >= 128 {
+            u64::skip(r)?;
+        }
+        Ok(result)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        u64::skip(r)
     }
 }
 
 impl Encodable for u16 {
-    #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_u16(*self)
+    fn encode(&self, w: &mut TdfWriter) {
+        (*self as u64).encode(w)
     }
 }
 
 impl Decodable for u16 {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_u16()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let value = u64::decode(r)?;
+        debug_assert!(
+            value <= u16::MAX as u64,
+            "Overflowed u16 bound while decoding"
+        );
+        Ok(value as u16)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        u64::skip(r)
     }
 }
 
 impl Encodable for u32 {
-    #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_u32(*self)
+    fn encode(&self, w: &mut TdfWriter) {
+        (*self as u64).encode(w)
     }
 }
 
 impl Decodable for u32 {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_u32()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let value = u64::decode(r)?;
+        debug_assert!(
+            value <= u32::MAX as u64,
+            "Overflowed u32 bound while decoding"
+        );
+        Ok(value as u32)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        u64::skip(r)
     }
 }
 
 impl Encodable for u64 {
-    #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_u64(*self)
+    fn encode(&self, w: &mut TdfWriter) {
+        let value = *self;
+        if value < 64 {
+            w.write_byte(value as u8);
+            return;
+        }
+        let mut byte: u8 = ((value & 63) as u8) | 128;
+        w.write_byte(byte);
+        let mut cur_shift = value >> 6;
+        while cur_shift >= 128 {
+            byte = ((cur_shift & 127) | 128) as u8;
+            cur_shift >>= 7;
+            w.write_byte(byte);
+        }
+        w.write_byte(cur_shift as u8)
     }
 }
 
 impl Decodable for u64 {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_u64()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let first: u8 = r.read_byte()?;
+        let mut result: u64 = (first & 63) as u64;
+        if first < 128 {
+            return Ok(result);
+        }
+        let mut shift: u8 = 6;
+        let mut byte: u8;
+        loop {
+            byte = r.read_byte()?;
+            result |= ((byte & 127) as u64) << shift;
+            if byte < 128 {
+                break;
+            }
+            shift += 7;
+        }
+        Ok(result)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        loop {
+            let byte = r.read_byte()?;
+            if byte < 128 {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
 impl Encodable for usize {
-    #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_usize(*self)
+    fn encode(&self, w: &mut TdfWriter) {
+        (*self as u64).encode(w)
     }
 }
 
 impl Decodable for usize {
-    #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_usize()
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let value = u64::decode(r)?;
+        debug_assert!(
+            value <= usize::MAX as u64,
+            "Overflowed usize bound while decoding"
+        );
+        Ok(value as usize)
+    }
+
+    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
+        u64::skip(r)
     }
 }
 
@@ -725,13 +798,13 @@ impl Encodable for Blob {
 
 impl Decodable for Blob {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let length = r.read_usize()?;
+        let length = usize::decode(r)?;
         let bytes = r.read_slice(length)?;
         Ok(Blob(bytes.to_vec()))
     }
 
     fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let length = r.read_usize()?;
+        let length = usize::decode(r)?;
         r.skip_length(length)
     }
 }
@@ -777,7 +850,7 @@ where
     C: Decodable + ValueType,
 {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let value_type: TdfType = r.read_type()?;
+        let value_type: TdfType = TdfType::decode(r)?;
         let expected_type = C::TYPE;
         if value_type != expected_type {
             return Err(DecodeError::InvalidType {
@@ -786,7 +859,7 @@ where
             });
         }
 
-        let length = r.read_usize()?;
+        let length = usize::decode(r)?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
             values.push(C::decode(r)?);
@@ -795,8 +868,8 @@ where
     }
 
     fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let ty: TdfType = r.read_type()?;
-        let length = r.read_usize()?;
+        let ty: TdfType = TdfType::decode(r)?;
+        let length = usize::decode(r)?;
         for _ in 0..length {
             r.skip_type(&ty)?;
         }
@@ -825,8 +898,8 @@ impl Encodable for ObjectType {
 
 impl Decodable for ObjectType {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let component = r.read_u16()?;
-        let ty = r.read_u16()?;
+        let component = u16::decode(r)?;
+        let ty = u16::decode(r)?;
         Ok(Self { component, ty })
     }
 
@@ -864,7 +937,7 @@ impl Encodable for ObjectId {
 impl Decodable for ObjectId {
     fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
         let ty = ObjectType::decode(r)?;
-        let id = r.read_u64()?;
+        let id = u64::decode(r)?;
         Ok(Self { ty, id })
     }
 

@@ -115,6 +115,13 @@ pub enum TdfType {
     U12 = 0xC,
 }
 
+impl Decodable for TdfType {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let value = r.read_byte()?;
+        TdfType::try_from(value)
+    }
+}
+
 /// Convert bytes back to tdf types
 impl TryFrom<u8> for TdfType {
     type Error = DecodeError;

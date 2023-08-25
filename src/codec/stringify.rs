@@ -79,7 +79,7 @@ impl StringifyReader<'_> {
     }
 
     fn next_var_int(&mut self) -> DecodeResult<()> {
-        let value = self.reader.read_u64()?;
+        let value = u64::decode(&mut self.reader)?;
         self.out.push_str(&value.to_string());
         Ok(())
     }
@@ -130,8 +130,8 @@ impl StringifyReader<'_> {
     }
 
     fn next_list(&mut self, indent: usize) -> DecodeResult<()> {
-        let value_type: TdfType = self.reader.read_type()?;
-        let length: usize = self.reader.read_usize()?;
+        let value_type: TdfType = TdfType::decode(&mut self.reader)?;
+        let length: usize = usize::decode(&mut self.reader)?;
         let expand = matches!(value_type, TdfType::Map | TdfType::Group);
         self.out.push('[');
         if expand {
@@ -158,9 +158,9 @@ impl StringifyReader<'_> {
     }
 
     fn next_map(&mut self, indent: usize) -> DecodeResult<()> {
-        let key_type: TdfType = self.reader.read_type()?;
-        let value_type: TdfType = self.reader.read_type()?;
-        let length: usize = self.reader.read_usize()?;
+        let key_type: TdfType = TdfType::decode(&mut self.reader)?;
+        let value_type: TdfType = TdfType::decode(&mut self.reader)?;
+        let length: usize = usize::decode(&mut self.reader)?;
         self.out.push_str(&format!(
             "Map<{:?}, {:?}, {}>",
             key_type, value_type, length
@@ -209,7 +209,7 @@ impl StringifyReader<'_> {
     }
 
     fn next_var_int_list(&mut self) -> DecodeResult<()> {
-        let length: usize = self.reader.read_usize()?;
+        let length: usize = usize::decode(&mut self.reader)?;
         self.out.push_str("VarList [");
         for i in 0..length {
             self.next_var_int()?;
