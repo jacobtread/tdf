@@ -1,29 +1,81 @@
 //! Types implementation for custom types used while encoding values
 //! with Blaze packets
 
+use crate::value_type;
+
 use super::{
-    codec::{reader::TdfReader, writer::TdfWriter, Decodable, Encodable, ValueType},
+    codec::{Decodable, Encodable, ValueType},
     error::{DecodeError, DecodeResult},
+    reader::TdfReader,
     tag::{Tag, TdfType},
+    writer::TdfWriter,
 };
-use crate::tag::Tagged;
+use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fmt::Debug;
-use std::{borrow::Borrow, fmt::Display};
-use std::{borrow::Cow, collections::HashMap};
 use std::{slice, vec};
 
-/// List of variable length integers represented using
-/// a vec of u64 values
-#[derive(Debug, PartialEq, Eq, Default)]
-pub struct VarIntList(pub Vec<u64>);
+/// List of Var ints
+#[derive(Debug, PartialEq, Eq)]
+pub struct VarIntList<T>(pub Vec<T>);
 
-impl VarIntList {
-    pub fn into_inner(self) -> Vec<u64> {
-        self.0
+impl<T> Default for VarIntList<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl Encodable for VarIntList {
+impl<T> VarIntList<T> {
+    /// Creates a new VarIntList
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Creates a new VarIntList with no capacity
+    pub fn empty() -> Self {
+        Self(Vec::with_capacity(0))
+    }
+
+    /// Creates a new VarIntList with the provided
+    /// capacity
+    ///
+    /// `capacity` The capacity for the underlying list
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+
+    /// Pushes a new value into the underlying list
+    ///
+    /// `value` The value to push
+    pub fn push(&mut self, value: impl Into<T>) {
+        self.0.push(value.into())
+    }
+
+    /// Removes the value at the provided index and returns
+    /// the value stored at it if there is one
+    ///
+    /// `index` The index to remove
+    pub fn remove(&mut self, index: usize) -> Option<T> {
+        if index < self.0.len() {
+            Some(self.0.remove(index))
+        } else {
+            None
+        }
+    }
+
+    /// Retrieves the value at the provided index returning
+    /// a borrow if one is there
+    ///
+    /// `index` The index to get the value at
+    pub fn get(&mut self, index: usize) -> Option<&T> {
+        self.0.get(index)
+    }
+}
+
+impl<C> Encodable for VarIntList<C>
+where
+    C: VarInt,
+{
     fn encode(&self, output: &mut TdfWriter) {
         output.write_usize(self.0.len());
         for value in &self.0 {
@@ -32,27 +84,24 @@ impl Encodable for VarIntList {
     }
 }
 
-impl Decodable for VarIntList {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let length = usize::decode(r)?;
+impl<C> Decodable for VarIntList<C>
+where
+    C: VarInt,
+{
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let length = reader.read_usize()?;
         let mut out = Vec::with_capacity(length);
         for _ in 0..length {
-            out.push(u64::decode(r)?);
+            out.push(C::decode(reader)?);
         }
         Ok(VarIntList(out))
     }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let length: usize = usize::decode(r)?;
-        for _ in 0..length {
-            u64::skip(r)?;
-        }
-        Ok(())
-    }
 }
 
-impl ValueType for VarIntList {
-    const TYPE: TdfType = TdfType::VarIntList;
+impl<C> ValueType for VarIntList<C> {
+    fn value_type() -> TdfType {
+        TdfType::VarIntList
+    }
 }
 
 /// Type that can be unset or contain a pair of key
@@ -111,7 +160,9 @@ impl<C> From<Union<C>> for Option<C> {
 }
 
 impl<C> ValueType for Union<C> {
-    const TYPE: TdfType = TdfType::TaggedUnion;
+    fn value_type() -> TdfType {
+        TdfType::Union
+    }
 }
 
 impl<C> Encodable for Union<C>
@@ -122,7 +173,7 @@ where
         match self {
             Union::Set { key, tag, value } => {
                 output.write_byte(*key);
-                output.tag(&tag.0, C::TYPE);
+                output.tag(&tag.0, C::value_type());
                 value.encode(output);
             }
             Union::Unset => output.write_byte(UNION_UNSET),
@@ -130,35 +181,17 @@ where
     }
 }
 
-/// Placeholder type used for skipping on fields on types
-/// with generics type parameters
-pub(crate) struct SkipType;
-
-impl Decodable for SkipType {
-    fn decode(_: &mut TdfReader) -> DecodeResult<Self> {
-        Ok(SkipType)
-    }
-
-    fn skip(_: &mut TdfReader) -> DecodeResult<()> {
-        Ok(())
-    }
-}
-
-impl ValueType for SkipType {
-    const TYPE: TdfType = TdfType::String;
-}
-
 impl<C> Decodable for Union<C>
 where
     C: Decodable + ValueType,
 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let key = r.read_byte()?;
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let key = reader.read_byte()?;
         if key == UNION_UNSET {
             return Ok(Union::Unset);
         }
-        let tag = Tagged::decode(r)?;
-        let expected_type = C::TYPE;
+        let tag = reader.read_tag()?;
+        let expected_type = C::value_type();
         let actual_type = tag.ty;
         if actual_type != expected_type {
             return Err(DecodeError::InvalidType {
@@ -166,21 +199,13 @@ where
                 actual: actual_type,
             });
         }
-        let value = C::decode(r)?;
+        let value = C::decode(reader)?;
 
         Ok(Union::Set {
             key,
             tag: tag.tag,
             value,
         })
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let ty = r.read_byte()?;
-        if ty != UNION_UNSET {
-            r.skip()?;
-        }
-        Ok(())
     }
 }
 
@@ -208,19 +233,30 @@ impl_var_int!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
 /// Structure for maps used in the protocol. These maps have a special
 /// order that is usually required and they retain the order of insertion
 /// because it uses two vecs as the underlying structure
-#[derive(Clone)]
 pub struct TdfMap<K, V> {
     /// The entries stored in this map
     entries: Vec<MapEntry<K, V>>,
 }
 
 /// Entry within a TdfMap storing a key value pair
-#[derive(Clone)]
 struct MapEntry<K, V> {
     /// Entry key
     key: K,
     /// Entry value
     value: V,
+}
+
+impl<K, V> Clone for MapEntry<K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            key: self.key.clone(),
+            value: self.value.clone(),
+        }
+    }
 }
 
 impl<K, V> Default for TdfMap<K, V> {
@@ -231,15 +267,29 @@ impl<K, V> Default for TdfMap<K, V> {
     }
 }
 
+impl<K, V> Clone for TdfMap<K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            entries: self.entries.clone(),
+        }
+    }
+}
+
 impl<K, V> Debug for TdfMap<K, V>
 where
     K: Debug,
     V: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut map = f.debug_map();
-        map.entries(self.iter());
-        map.finish()
+        f.write_str("TdfMap {")?;
+        for (key, value) in self.iter() {
+            writeln!(f, "  {key:?}: {value:?}")?;
+        }
+        f.write_str("}")
     }
 }
 
@@ -497,92 +547,35 @@ impl<K, V, B: Into<K>, A: Into<V>> FromIterator<(B, A)> for TdfMap<K, V> {
     }
 }
 
-impl<K, V> Decodable for TdfMap<K, V>
-where
-    K: Decodable + ValueType,
-    V: Decodable + ValueType,
-{
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let header = TdfMapHeader::decode(r)?;
-
-        if K::TYPE != header.key {
-            return Err(DecodeError::InvalidType {
-                expected: K::TYPE,
-                actual: header.key,
-            });
-        }
-
-        if V::TYPE != header.value {
-            return Err(DecodeError::InvalidType {
-                expected: V::TYPE,
-                actual: header.value,
-            });
-        }
-
-        let mut map: TdfMap<K, V> = TdfMap::with_capacity(header.length);
-        for _ in 0..header.length {
-            let key: K = K::decode(r)?;
-            let value: V = V::decode(r)?;
-            map.insert(key, value);
-        }
-
-        Ok(map)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let header = TdfMapHeader::decode(r)?;
-        for _ in 0..header.length {
-            r.skip_type(&header.key)?;
-            r.skip_type(&header.value)?;
-        }
-        Ok(())
-    }
-}
-
 impl<K, V> Encodable for TdfMap<K, V>
 where
     K: Encodable + ValueType,
     V: Encodable + ValueType,
 {
-    fn encode(&self, w: &mut TdfWriter) {
-        TdfMapHeader {
-            key: K::TYPE,
-            value: V::TYPE,
-            length: self.len(),
-        }
-        .encode(w);
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_map_header(K::value_type(), V::value_type(), self.len());
 
         for MapEntry { key, value } in &self.entries {
-            key.encode(w);
-            value.encode(w);
+            key.encode(output);
+            value.encode(output);
         }
+    }
+}
+
+impl<K, V> Decodable for TdfMap<K, V>
+where
+    K: Decodable + ValueType,
+    V: Decodable + ValueType,
+{
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_map()
     }
 }
 
 impl<K, V> ValueType for TdfMap<K, V> {
-    const TYPE: TdfType = TdfType::Map;
-}
-
-pub struct TdfMapHeader {
-    pub key: TdfType,
-    pub value: TdfType,
-    pub length: usize,
-}
-
-impl Decodable for TdfMapHeader {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let key: TdfType = TdfType::decode(r)?;
-        let value: TdfType = TdfType::decode(r)?;
-        let length = usize::decode(r)?;
-        Ok(Self { key, value, length })
-    }
-}
-
-impl Encodable for TdfMapHeader {
-    fn encode(&self, w: &mut TdfWriter) {
-        self.key.encode(w);
-        self.value.encode(w);
-        self.length.encode(w);
+    fn value_type() -> TdfType {
+        TdfType::Map
     }
 }
 
@@ -603,42 +596,34 @@ impl<K, V> From<HashMap<K, V>> for TdfMap<K, V> {
 impl Encodable for f32 {
     #[inline]
     fn encode(&self, output: &mut TdfWriter) {
-        let bytes: [u8; 4] = (*self).to_be_bytes();
-        output.buffer.extend_from_slice(&bytes);
+        output.write_f32(*self)
     }
 }
 
 impl Decodable for f32 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let bytes: [u8; 4] = r.read_bytes()?;
-        Ok(f32::from_be_bytes(bytes))
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        r.skip_length(4)
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_f32()
     }
 }
 
-impl ValueType for f32 {
-    const TYPE: TdfType = TdfType::Float;
-}
+value_type!(f32, TdfType::Float);
 
 impl Encodable for bool {
-    fn encode(&self, w: &mut TdfWriter) {
-        (*self as u8).encode(w);
+    #[inline]
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_bool(*self)
     }
 }
 
 impl Decodable for bool {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let value = u8::decode(r)?;
-        Ok(value == 1)
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_bool()
     }
 }
 
-impl ValueType for bool {
-    const TYPE: TdfType = TdfType::VarInt;
-}
+value_type!(bool, TdfType::VarInt);
 
 /// Macro for forwarding the encode and decodes of a type to
 /// another types encoder and decoder
@@ -650,8 +635,8 @@ macro_rules! forward_codec {
         impl Decodable for $a {
             #[inline]
             fn decode(
-                reader: &mut $crate::codec::reader::TdfReader,
-            ) -> $crate::error::DecodeResult<Self> {
+                reader: &mut $crate::blaze::pk::reader::TdfReader,
+            ) -> $crate::blaze::pk::error::DecodeResult<Self> {
                 Ok($b::decode(reader)? as $a)
             }
         }
@@ -663,8 +648,11 @@ macro_rules! forward_codec {
             }
         }
 
-        impl $crate::codec::ValueType for $a {
-            const TYPE: TdfType = $b::TYPE;
+        impl $crate::blaze::pk::codec::ValueType for $a {
+            #[inline]
+            fn value_type() -> TdfType {
+                $b::value_type()
+            }
         }
     };
 }
@@ -672,185 +660,80 @@ macro_rules! forward_codec {
 // Encoding for u8 values
 
 impl Encodable for u8 {
-    fn encode(&self, w: &mut TdfWriter) {
-        let value = *self;
-        // Values < 64 are directly appended to buffer
-        if value < 64 {
-            w.buffer.push(value);
-            return;
-        }
-        w.buffer.push((value & 63) | 128);
-        w.buffer.push(value >> 6);
+    #[inline]
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_u8(*self)
     }
 }
 
 impl Decodable for u8 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let first: u8 = r.read_byte()?;
-        let mut result: u8 = first & 63;
-        // Values less than 128 are already complete and don't need more reading
-        if first < 128 {
-            return Ok(result);
-        }
-
-        let byte: u8 = r.read_byte()?;
-        result |= (byte & 127) << 6;
-
-        // Consume remaining unused VarInt data. We only wanted a u8
-        if byte >= 128 {
-            u64::skip(r)?;
-        }
-        Ok(result)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        u64::skip(r)
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_u8()
     }
 }
 
 impl Encodable for u16 {
-    fn encode(&self, w: &mut TdfWriter) {
-        let value = *self;
-        if value < 64 {
-            w.buffer.push(value as u8);
-            return;
-        }
-        let mut byte: u8 = ((value & 63) as u8) | 128;
-        let mut shift: u16 = value >> 6;
-        w.buffer.push(byte);
-        byte = ((shift & 127) | 128) as u8;
-        shift >>= 7;
-        w.buffer.push(byte);
-        w.buffer.push(shift as u8);
+    #[inline]
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_u16(*self)
     }
 }
 
 impl Decodable for u16 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let value = u64::decode(r)?;
-        debug_assert!(
-            value <= u16::MAX as u64,
-            "Overflowed u16 bound while decoding"
-        );
-        Ok(value as u16)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        u64::skip(r)
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_u16()
     }
 }
 
 impl Encodable for u32 {
-    fn encode(&self, w: &mut TdfWriter) {
-        (*self as u64).encode(w)
+    #[inline]
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_u32(*self)
     }
 }
 
 impl Decodable for u32 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let value = u64::decode(r)?;
-        debug_assert!(
-            value <= u32::MAX as u64,
-            "Overflowed u32 bound while decoding"
-        );
-        Ok(value as u32)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        u64::skip(r)
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_u32()
     }
 }
 
 impl Encodable for u64 {
-    fn encode(&self, w: &mut TdfWriter) {
-        let value = *self;
-        if value < 64 {
-            w.write_byte(value as u8);
-            return;
-        }
-        let mut byte: u8 = ((value & 63) as u8) | 128;
-        w.write_byte(byte);
-        let mut cur_shift = value >> 6;
-        while cur_shift >= 128 {
-            byte = ((cur_shift & 127) | 128) as u8;
-            cur_shift >>= 7;
-            w.write_byte(byte);
-        }
-        w.write_byte(cur_shift as u8)
+    #[inline]
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_u64(*self)
     }
 }
 
 impl Decodable for u64 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let first: u8 = r.read_byte()?;
-        let mut result: u64 = (first & 63) as u64;
-        if first < 128 {
-            return Ok(result);
-        }
-        let mut shift: u8 = 6;
-        let mut byte: u8;
-        loop {
-            byte = r.read_byte()?;
-            result |= ((byte & 127) as u64) << shift;
-            if byte < 128 {
-                break;
-            }
-            shift += 7;
-        }
-        Ok(result)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        loop {
-            let byte = r.read_byte()?;
-            if byte < 128 {
-                break;
-            }
-        }
-        Ok(())
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_u64()
     }
 }
 
 impl Encodable for usize {
-    fn encode(&self, w: &mut TdfWriter) {
-        (*self as u64).encode(w)
+    #[inline]
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_usize(*self)
     }
 }
 
 impl Decodable for usize {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let value = u64::decode(r)?;
-        debug_assert!(
-            value <= usize::MAX as u64,
-            "Overflowed usize bound while decoding"
-        );
-        Ok(value as usize)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        u64::skip(r)
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.read_usize()
     }
 }
 
-impl ValueType for u8 {
-    const TYPE: TdfType = TdfType::VarInt;
-}
-
-impl ValueType for u16 {
-    const TYPE: TdfType = TdfType::VarInt;
-}
-
-impl ValueType for u32 {
-    const TYPE: TdfType = TdfType::VarInt;
-}
-
-impl ValueType for u64 {
-    const TYPE: TdfType = TdfType::VarInt;
-}
-
-impl ValueType for usize {
-    const TYPE: TdfType = TdfType::VarInt;
-}
+value_type!(u8, TdfType::VarInt);
+value_type!(u16, TdfType::VarInt);
+value_type!(u32, TdfType::VarInt);
+value_type!(u64, TdfType::VarInt);
+value_type!(usize, TdfType::VarInt);
 
 forward_codec!(i8, u8);
 forward_codec!(i16, u16);
@@ -865,9 +748,7 @@ impl Encodable for &'_ str {
     }
 }
 
-impl ValueType for &str {
-    const TYPE: TdfType = TdfType::String;
-}
+value_type!(&'_ str, TdfType::String);
 
 impl Encodable for String {
     #[inline]
@@ -877,23 +758,13 @@ impl Encodable for String {
 }
 
 impl Decodable for String {
+    #[inline]
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let bytes: &[u8] = reader.read_blob()?;
-        let text: Cow<str> = String::from_utf8_lossy(bytes);
-        let mut text: String = text.to_string();
-        // Remove null terminator
-        text.pop();
-        Ok(text)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        Blob::skip(r)
+        reader.read_string()
     }
 }
 
-impl ValueType for String {
-    const TYPE: TdfType = TdfType::String;
-}
+value_type!(String, TdfType::String);
 
 /// Blob structure wrapping a vec of bytes. This implementation is
 /// to differenciate between a list of VarInts and a Blob of straight
@@ -909,21 +780,14 @@ impl Encodable for Blob {
 }
 
 impl Decodable for Blob {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let length = usize::decode(r)?;
-        let bytes = r.read_slice(length)?;
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let length = reader.read_usize()?;
+        let bytes = reader.read_slice(length)?;
         Ok(Blob(bytes.to_vec()))
     }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let length = usize::decode(r)?;
-        r.skip_length(length)
-    }
 }
 
-impl ValueType for Blob {
-    const TYPE: TdfType = TdfType::String;
-}
+value_type!(Blob, TdfType::Blob);
 
 /// Vec List encoding for encodable items items are required
 /// to have the ValueType trait in order to write the list header
@@ -932,7 +796,11 @@ where
     C: Encodable + ValueType,
 {
     fn encode(&self, writer: &mut TdfWriter) {
-        self.as_slice().encode(writer);
+        writer.write_type(C::value_type());
+        writer.write_usize(self.len());
+        for value in self {
+            value.encode(writer);
+        }
     }
 }
 
@@ -942,7 +810,7 @@ where
     C: Encodable + ValueType,
 {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_type(C::TYPE);
+        writer.write_type(C::value_type());
         writer.write_usize(self.len());
         for value in self.iter() {
             value.encode(writer);
@@ -954,16 +822,18 @@ impl<C> ValueType for &[C]
 where
     C: Encodable + ValueType,
 {
-    const TYPE: TdfType = TdfType::List;
+    fn value_type() -> TdfType {
+        TdfType::List
+    }
 }
 
 impl<C> Decodable for Vec<C>
 where
     C: Decodable + ValueType,
 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let value_type: TdfType = TdfType::decode(r)?;
-        let expected_type = C::TYPE;
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let value_type: TdfType = reader.read_type()?;
+        let expected_type = C::value_type();
         if value_type != expected_type {
             return Err(DecodeError::InvalidType {
                 expected: expected_type,
@@ -971,127 +841,85 @@ where
             });
         }
 
-        let length = usize::decode(r)?;
+        let length = reader.read_usize()?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
-            values.push(C::decode(r)?);
+            values.push(C::decode(reader)?);
         }
         Ok(values)
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let ty: TdfType = TdfType::decode(r)?;
-        let length = usize::decode(r)?;
-        for _ in 0..length {
-            r.skip_type(&ty)?;
-        }
-        Ok(())
     }
 }
 
 impl<C> ValueType for Vec<C> {
-    const TYPE: TdfType = TdfType::List;
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ObjectType {
-    /// Component for the object type
-    pub component: u16,
-    /// The object type
-    pub ty: u16,
-}
-
-impl Encodable for ObjectType {
-    fn encode(&self, w: &mut TdfWriter) {
-        w.write_u16(self.component);
-        w.write_u16(self.ty);
+    fn value_type() -> TdfType {
+        TdfType::List
     }
 }
 
-impl Decodable for ObjectType {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let component = u16::decode(r)?;
-        let ty = u16::decode(r)?;
-        Ok(Self { component, ty })
-    }
+/// Pair type alias. (Note Pairs should only ever be used with VarInts)
+pub type Pair<A, B> = (A, B);
 
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        u64::skip(r)?;
-        u64::skip(r)
-    }
-}
-
-impl ValueType for ObjectType {
-    const TYPE: TdfType = TdfType::ObjectType;
-}
-
-impl Display for ObjectType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ObjectType({:#x}, {:#x})", self.component, self.ty)
+impl<A, B> Encodable for Pair<A, B>
+where
+    A: VarInt,
+    B: VarInt,
+{
+    fn encode(&self, output: &mut TdfWriter) {
+        self.0.encode(output);
+        self.1.encode(output);
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ObjectId {
-    /// The object type
-    pub ty: ObjectType,
-    /// The object ID
-    pub id: u64,
-}
-
-impl Encodable for ObjectId {
-    fn encode(&self, w: &mut TdfWriter) {
-        self.ty.encode(w);
-        self.id.encode(w);
+impl<A, B> Decodable for Pair<A, B>
+where
+    A: VarInt,
+    B: VarInt,
+{
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let a = A::decode(reader)?;
+        let b = B::decode(reader)?;
+        Ok((a, b))
     }
 }
 
-impl Decodable for ObjectId {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let ty = ObjectType::decode(r)?;
-        let id = u64::decode(r)?;
-        Ok(Self { ty, id })
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        ObjectType::skip(r)?;
-        u64::skip(r)?;
-        Ok(())
+impl<A, B> ValueType for Pair<A, B> {
+    fn value_type() -> TdfType {
+        TdfType::Pair
     }
 }
 
-impl ValueType for ObjectId {
-    const TYPE: TdfType = TdfType::ObjectId;
-}
+/// Triple type alias. (Note Triples should only ever be used with VarInts)
+pub type Triple<A, B, C> = (A, B, C);
 
-impl Display for ObjectId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ObjectId({}, {})", self.ty, self.id)
+impl<A, B, C> Encodable for Triple<A, B, C>
+where
+    A: VarInt,
+    B: VarInt,
+    C: VarInt,
+{
+    fn encode(&self, output: &mut TdfWriter) {
+        self.0.encode(output);
+        self.1.encode(output);
+        self.2.encode(output);
+    }
+}
+impl<A, B, C> Decodable for Triple<A, B, C>
+where
+    A: VarInt,
+    B: VarInt,
+    C: VarInt,
+{
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let a = A::decode(reader)?;
+        let b = B::decode(reader)?;
+        let c = C::decode(reader)?;
+        Ok((a, b, c))
     }
 }
 
-pub struct U12 {
-    pub data: [u8; 8],
-    pub value: String,
-}
-
-impl Encodable for U12 {
-    fn encode(&self, w: &mut TdfWriter) {
-        w.write_slice(&self.data);
-        self.value.encode(w);
-    }
-}
-
-impl Decodable for U12 {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let data: [u8; 8] = r.read_bytes()?;
-        let value = String::decode(r)?;
-        Ok(U12 { data, value })
-    }
-
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        r.skip_length(8)?;
-        String::skip(r)
+impl<A, B, C> ValueType for Triple<A, B, C> {
+    fn value_type() -> TdfType {
+        TdfType::Triple
     }
 }
 
@@ -1100,7 +928,7 @@ mod test {
 
     use std::time::Instant;
 
-    use crate::types::TdfMap;
+    use crate::blaze::pk::types::TdfMap;
 
     /// Tests ordering a map
     #[test]

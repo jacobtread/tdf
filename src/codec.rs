@@ -1,13 +1,7 @@
 //! Traits for implementing encoding ([`Encodable`]) and decoding ([`Decodable`])
 //! for different types and [`ValueType`] trait for specifying the Tdf type of a type
 
-use super::{error::DecodeResult, tag::TdfType};
-use reader::TdfReader;
-use writer::TdfWriter;
-
-pub mod reader;
-pub mod stringify;
-pub mod writer;
+use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfWriter};
 
 /// Trait for something that can be decoded from a TdfReader
 pub trait Decodable: Sized {
@@ -17,15 +11,6 @@ pub trait Decodable: Sized {
     ///
     /// `reader` The reader to decode from
     fn decode(r: &mut TdfReader) -> DecodeResult<Self>;
-
-    /// Decode this type without actually using the value,
-    /// default implementation is just to read the value
-    /// however for types that allocate heap space this can
-    /// be overriden to provide a zero heap allocation version
-    fn skip(r: &mut TdfReader) -> DecodeResult<()> {
-        let _ = Self::decode(r)?;
-        Ok(())
-    }
 }
 
 /// Trait for something that can be encoded onto a TdfWriter
@@ -49,5 +34,18 @@ pub trait Encodable: Sized {
 /// used on structures that implement Decodable or Encodable to allow
 /// them to be encoded as tag fields
 pub trait ValueType {
-    const TYPE: TdfType;
+    /// The type of tdf value this is
+    fn value_type() -> TdfType;
+}
+
+/// Macro for generating the ValueType implementation for a type
+#[macro_export]
+macro_rules! value_type {
+    ($for:ty, $type:expr) => {
+        impl $crate::blaze::pk::codec::ValueType for $for {
+            fn value_type() -> $crate::blaze::pk::tag::TdfType {
+                $type
+            }
+        }
+    };
 }
