@@ -859,67 +859,58 @@ impl<C> TdfTyped for Vec<C> {
     const TYPE: TdfType = TdfType::List;
 }
 
-/// Pair type alias. (Note Pairs should only ever be used with VarInts)
-pub type Pair<A, B> = (A, B);
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ObjectType {
+    /// Component for the object type
+    pub component: u16,
+    /// The object type
+    pub ty: u16,
+}
 
-impl<A, B> Encodable for Pair<A, B>
-where
-    A: VarInt,
-    B: VarInt,
-{
-    fn encode(&self, output: &mut TdfWriter) {
-        self.0.encode(output);
-        self.1.encode(output);
+impl Encodable for ObjectType {
+    fn encode(&self, w: &mut TdfWriter) {
+        w.write_u16(self.component);
+        w.write_u16(self.ty);
     }
 }
 
-impl<A, B> Decodable for Pair<A, B>
-where
-    A: VarInt,
-    B: VarInt,
-{
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let a = A::decode(reader)?;
-        let b = B::decode(reader)?;
-        Ok((a, b))
+impl Decodable for ObjectType {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let component = r.read_u16()?;
+        let ty = r.read_u16()?;
+        Ok(Self { component, ty })
     }
 }
 
-impl<A, B> TdfTyped for Pair<A, B> {
-    const TYPE: TdfType = TdfType::Pair;
+impl TdfTyped for ObjectType {
+    const TYPE: TdfType = TdfType::ObjectType;
 }
 
-/// Triple type alias. (Note Triples should only ever be used with VarInts)
-pub type Triple<A, B, C> = (A, B, C);
-
-impl<A, B, C> Encodable for Triple<A, B, C>
-where
-    A: VarInt,
-    B: VarInt,
-    C: VarInt,
-{
-    fn encode(&self, output: &mut TdfWriter) {
-        self.0.encode(output);
-        self.1.encode(output);
-        self.2.encode(output);
-    }
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ObjectId {
+    /// The object type
+    pub ty: ObjectType,
+    /// The object ID
+    pub id: u64,
 }
-impl<A, B, C> Decodable for Triple<A, B, C>
-where
-    A: VarInt,
-    B: VarInt,
-    C: VarInt,
-{
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let a = A::decode(reader)?;
-        let b = B::decode(reader)?;
-        let c = C::decode(reader)?;
-        Ok((a, b, c))
+
+impl Encodable for ObjectId {
+    fn encode(&self, w: &mut TdfWriter) {
+        self.ty.encode(w);
+        w.write_u64(self.id);
     }
 }
 
-impl<A, B, C> TdfTyped for Triple<A, B, C> {
-    const TYPE: TdfType = TdfType::Triple;
+impl Decodable for ObjectId {
+    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+        let ty = ObjectType::decode(r)?;
+        let id = r.read_u64()?;
+        Ok(Self { ty, id })
+    }
+}
+
+impl TdfTyped for ObjectId {
+    const TYPE: TdfType = TdfType::ObjectId;
 }
 
 #[cfg(test)]

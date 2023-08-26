@@ -327,31 +327,17 @@ impl TdfWriter {
         }
     }
 
-    /// Writes a tag with a pair of values
-    ///
-    /// `tag`   The tag to write
-    /// `value` The value to write
-    pub fn tag_pair<A, B>(&mut self, tag: &[u8], value: (A, B))
-    where
-        A: VarInt,
-        B: VarInt,
-    {
-        self.tag(tag, TdfType::Pair);
-        value.encode(self);
+    pub fn tag_object_type(&mut self, tag: &[u8], component: u16, ty: u16) {
+        self.tag(tag, TdfType::ObjectType);
+        self.write_u16(component);
+        self.write_u16(ty);
     }
 
-    /// Writes a tag with a triple of values
-    ///
-    /// `tag`   The tag to write
-    /// `value` The value to write
-    pub fn tag_triple<A, B, C>(&mut self, tag: &[u8], value: (A, B, C))
-    where
-        A: VarInt,
-        B: VarInt,
-        C: VarInt,
-    {
-        self.tag(tag, TdfType::Triple);
-        value.encode(self);
+    pub fn tag_object_id(&mut self, tag: &[u8], component: u16, ty: u16, id: u64) {
+        self.tag(tag, TdfType::ObjectId);
+        self.write_u16(component);
+        self.write_u16(ty);
+        self.write_u64(id);
     }
 
     /// Writes an empty string. This is simply two bytes a 1 and a 0 which
@@ -551,8 +537,8 @@ mod test {
             TdfType::Map,
             TdfType::Union,
             TdfType::VarIntList,
-            TdfType::Pair,
-            TdfType::Triple,
+            TdfType::ObjectType,
+            TdfType::ObjectId,
             TdfType::Float,
         ];
         let mut writer = TdfWriter::default();
@@ -803,22 +789,22 @@ mod test {
 
     /// Tests writing a pair
     #[test]
-    fn test_tag_pair() {
+    fn test_tag_object_type() {
         let mut writer = TdfWriter::default();
-        writer.tag_pair(b"TEST", (5, 10));
+        writer.tag_object_type(b"TEST", 5, 10);
         assert_eq!(writer.buffer.len(), 6);
-        assert_eq!(writer.buffer[3], TdfType::Pair as u8);
+        assert_eq!(writer.buffer[3], TdfType::ObjectType as u8);
         assert_eq!(writer.buffer[4], 5);
         assert_eq!(writer.buffer[5], 10);
     }
 
     /// Tests writing a triple
     #[test]
-    fn test_tag_triple() {
+    fn test_tag_object_id() {
         let mut writer = TdfWriter::default();
-        writer.tag_triple(b"TEST", (5, 10, 50));
+        writer.tag_object_id(b"TEST", 5, 10, 50);
         assert_eq!(writer.buffer.len(), 7);
-        assert_eq!(writer.buffer[3], TdfType::Triple as u8);
+        assert_eq!(writer.buffer[3], TdfType::ObjectId as u8);
         assert_eq!(writer.buffer[4], 5);
         assert_eq!(writer.buffer[5], 10);
         assert_eq!(writer.buffer[6], 50);

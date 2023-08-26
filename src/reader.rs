@@ -482,11 +482,11 @@ impl<'a> TdfReader<'a> {
             TdfType::Map => self.skip_map()?,
             TdfType::Union => self.skip_union()?,
             TdfType::VarIntList => self.skip_var_int_list()?,
-            TdfType::Pair => {
+            TdfType::ObjectType => {
                 self.skip_var_int();
                 self.skip_var_int();
             }
-            TdfType::Triple => {
+            TdfType::ObjectId => {
                 self.skip_var_int();
                 self.skip_var_int();
                 self.skip_var_int();
@@ -494,7 +494,7 @@ impl<'a> TdfReader<'a> {
             TdfType::Float => self.skip_f32()?,
             TdfType::U12 => {
                 self.read_slice(8)?;
-                self.skip_blob(); // string
+                self.skip_blob()?; // string
             }
         }
         Ok(())
@@ -680,18 +680,18 @@ impl<'a> TdfReader<'a> {
                 }
                 out.push(']');
             }
-            TdfType::Pair => {
+            TdfType::ObjectType => {
                 let a = self.read_usize()?;
                 let b = self.read_usize()?;
 
-                out.push_str(&format!("({}, {})", a, b))
+                out.push_str(&format!("ObjectType({}, {})", a, b))
             }
-            TdfType::Triple => {
+            TdfType::ObjectId => {
                 let a = self.read_usize()?;
                 let b = self.read_usize()?;
                 let c = self.read_usize()?;
 
-                out.push_str(&format!("({}, {}, {})", a, b, c))
+                out.push_str(&format!("ObjectId({}, {}, {})", a, b, c))
             }
             TdfType::Float => {
                 let value = self.read_f32()?;

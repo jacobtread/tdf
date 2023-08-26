@@ -71,9 +71,9 @@ pub enum TdfType {
     /// List of variable length integers
     VarIntList = 0x7,
     /// Pair of two var int values
-    Pair = 0x8,
+    ObjectType = 0x8,
     /// Three var int values
-    Triple = 0x9,
+    ObjectId = 0x9,
     /// f32 value
     Float = 0xA,
     // Not yet properly decoded
@@ -94,8 +94,8 @@ impl TryFrom<u8> for TdfType {
             0x5 => TdfType::Map,
             0x6 => TdfType::Union,
             0x7 => TdfType::VarIntList,
-            0x8 => TdfType::Pair,
-            0x9 => TdfType::Triple,
+            0x8 => TdfType::ObjectType,
+            0x9 => TdfType::ObjectId,
             0xA => TdfType::Float,
             0xC => TdfType::U12,
             ty => return Err(DecodeError::UnknownType { ty }),
