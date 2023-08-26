@@ -2,7 +2,7 @@
 //! with Blaze packets
 
 use super::{
-    codec::{Decodable, Encodable, TdfTyped},
+    codec::{TdfDeserialize, TdfSerialize, TdfTyped},
     error::{DecodeError, DecodeResult},
     reader::TdfReader,
     tag::{Tag, TdfType},
@@ -70,27 +70,27 @@ impl<T> VarIntList<T> {
     }
 }
 
-impl<C> Encodable for VarIntList<C>
+impl<C> TdfSerialize for VarIntList<C>
 where
     C: VarInt,
 {
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_usize(self.0.len());
         for value in &self.0 {
-            value.encode(output);
+            value.serialize(output);
         }
     }
 }
 
-impl<C> Decodable for VarIntList<C>
+impl<C> TdfDeserialize for VarIntList<C>
 where
     C: VarInt,
 {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let length = reader.read_usize()?;
         let mut out = Vec::with_capacity(length);
         for _ in 0..length {
-            out.push(C::decode(reader)?);
+            out.push(C::deserialize(reader)?);
         }
         Ok(VarIntList(out))
     }
@@ -159,27 +159,27 @@ impl<C> TdfTyped for Union<C> {
     const TYPE: TdfType = TdfType::Union;
 }
 
-impl<C> Encodable for Union<C>
+impl<C> TdfSerialize for Union<C>
 where
-    C: Encodable + TdfTyped,
+    C: TdfSerialize + TdfTyped,
 {
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         match self {
             Union::Set { key, tag, value } => {
                 output.write_byte(*key);
                 output.tag(&tag.0, C::TYPE);
-                value.encode(output);
+                value.serialize(output);
             }
             Union::Unset => output.write_byte(UNION_UNSET),
         }
     }
 }
 
-impl<C> Decodable for Union<C>
+impl<C> TdfDeserialize for Union<C>
 where
-    C: Decodable + TdfTyped,
+    C: TdfDeserialize + TdfTyped,
 {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let key = reader.read_byte()?;
         if key == UNION_UNSET {
             return Ok(Union::Unset);
@@ -193,7 +193,7 @@ where
                 actual: actual_type,
             });
         }
-        let value = C::decode(reader)?;
+        let value = C::deserialize(reader)?;
 
         Ok(Union::Set {
             key,
@@ -207,7 +207,7 @@ where
 pub const UNION_UNSET: u8 = 0x7F;
 
 /// Trait implemented by VarInt types
-pub trait VarInt: PartialEq + Eq + Debug + Encodable + Decodable {}
+pub trait VarInt: PartialEq + Eq + Debug + TdfSerialize + TdfDeserialize {}
 
 /// Trait that must be implemented on a type for it to
 /// be considered a map key
@@ -541,28 +541,28 @@ impl<K, V, B: Into<K>, A: Into<V>> FromIterator<(B, A)> for TdfMap<K, V> {
     }
 }
 
-impl<K, V> Encodable for TdfMap<K, V>
+impl<K, V> TdfSerialize for TdfMap<K, V>
 where
-    K: Encodable + TdfTyped,
-    V: Encodable + TdfTyped,
+    K: TdfSerialize + TdfTyped,
+    V: TdfSerialize + TdfTyped,
 {
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_map_header(K::TYPE, V::TYPE, self.len());
 
         for MapEntry { key, value } in &self.entries {
-            key.encode(output);
-            value.encode(output);
+            key.serialize(output);
+            value.serialize(output);
         }
     }
 }
 
-impl<K, V> Decodable for TdfMap<K, V>
+impl<K, V> TdfDeserialize for TdfMap<K, V>
 where
-    K: Decodable + TdfTyped,
-    V: Decodable + TdfTyped,
+    K: TdfDeserialize + TdfTyped,
+    V: TdfDeserialize + TdfTyped,
 {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_map()
     }
 }
@@ -585,16 +585,16 @@ impl<K, V> From<HashMap<K, V>> for TdfMap<K, V> {
     }
 }
 
-impl Encodable for f32 {
+impl TdfSerialize for f32 {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_f32(*self)
     }
 }
 
-impl Decodable for f32 {
+impl TdfDeserialize for f32 {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_f32()
     }
 }
@@ -603,16 +603,16 @@ impl TdfTyped for f32 {
     const TYPE: TdfType = TdfType::Float;
 }
 
-impl Encodable for bool {
+impl TdfSerialize for bool {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_bool(*self)
     }
 }
 
-impl Decodable for bool {
+impl TdfDeserialize for bool {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_bool()
     }
 }
@@ -628,17 +628,19 @@ impl TdfTyped for bool {
 /// `$b` The type to forward to
 macro_rules! forward_codec {
     ($a:ident, $b:ident) => {
-        impl Decodable for $a {
+        impl TdfDeserialize for $a {
             #[inline]
-            fn decode(reader: &mut $crate::reader::TdfReader) -> $crate::error::DecodeResult<Self> {
-                Ok($b::decode(reader)? as $a)
+            fn deserialize(
+                reader: &mut $crate::reader::TdfReader,
+            ) -> $crate::error::DecodeResult<Self> {
+                Ok($b::deserialize(reader)? as $a)
             }
         }
 
-        impl Encodable for $a {
+        impl TdfSerialize for $a {
             #[inline]
-            fn encode(&self, output: &mut TdfWriter) {
-                $b::encode(&(*self as $b), output)
+            fn serialize(&self, output: &mut TdfWriter) {
+                $b::serialize(&(*self as $b), output)
             }
         }
 
@@ -650,72 +652,72 @@ macro_rules! forward_codec {
 
 // Encoding for u8 values
 
-impl Encodable for u8 {
+impl TdfSerialize for u8 {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_u8(*self)
     }
 }
 
-impl Decodable for u8 {
+impl TdfDeserialize for u8 {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u8()
     }
 }
 
-impl Encodable for u16 {
+impl TdfSerialize for u16 {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_u16(*self)
     }
 }
 
-impl Decodable for u16 {
+impl TdfDeserialize for u16 {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u16()
     }
 }
 
-impl Encodable for u32 {
+impl TdfSerialize for u32 {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_u32(*self)
     }
 }
 
-impl Decodable for u32 {
+impl TdfDeserialize for u32 {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u32()
     }
 }
 
-impl Encodable for u64 {
+impl TdfSerialize for u64 {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_u64(*self)
     }
 }
 
-impl Decodable for u64 {
+impl TdfDeserialize for u64 {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u64()
     }
 }
 
-impl Encodable for usize {
+impl TdfSerialize for usize {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_usize(*self)
     }
 }
 
-impl Decodable for usize {
+impl TdfDeserialize for usize {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_usize()
     }
 }
@@ -742,9 +744,9 @@ forward_codec!(i32, u32);
 forward_codec!(i64, u64);
 forward_codec!(isize, usize);
 
-impl Encodable for &str {
+impl TdfSerialize for &str {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_str(self)
     }
 }
@@ -753,16 +755,16 @@ impl TdfTyped for &str {
     const TYPE: TdfType = TdfType::String;
 }
 
-impl Encodable for String {
+impl TdfSerialize for String {
     #[inline]
-    fn encode(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_str(self);
     }
 }
 
-impl Decodable for String {
+impl TdfDeserialize for String {
     #[inline]
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_string()
     }
 }
@@ -777,15 +779,15 @@ impl TdfTyped for String {
 #[derive(Default, Debug, Clone)]
 pub struct Blob(pub Vec<u8>);
 
-impl Encodable for Blob {
-    fn encode(&self, output: &mut TdfWriter) {
+impl TdfSerialize for Blob {
+    fn serialize(&self, output: &mut TdfWriter) {
         output.write_usize(self.0.len());
         output.write_slice(&self.0);
     }
 }
 
-impl Decodable for Blob {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+impl TdfDeserialize for Blob {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let length = reader.read_usize()?;
         let bytes = reader.read_slice(length)?;
         Ok(Blob(bytes.to_vec()))
@@ -798,45 +800,45 @@ impl TdfTyped for Blob {
 
 /// Vec List encoding for encodable items items are required
 /// to have the ValueType trait in order to write the list header
-impl<C> Encodable for Vec<C>
+impl<C> TdfSerialize for Vec<C>
 where
-    C: Encodable + TdfTyped,
+    C: TdfSerialize + TdfTyped,
 {
-    fn encode(&self, writer: &mut TdfWriter) {
+    fn serialize(&self, writer: &mut TdfWriter) {
         writer.write_type(C::TYPE);
         writer.write_usize(self.len());
         for value in self {
-            value.encode(writer);
+            value.serialize(writer);
         }
     }
 }
 
 /// Support for encoding slices of encodable items as lists
-impl<C> Encodable for &[C]
+impl<C> TdfSerialize for &[C]
 where
-    C: Encodable + TdfTyped,
+    C: TdfSerialize + TdfTyped,
 {
-    fn encode(&self, writer: &mut TdfWriter) {
+    fn serialize(&self, writer: &mut TdfWriter) {
         writer.write_type(C::TYPE);
         writer.write_usize(self.len());
         for value in self.iter() {
-            value.encode(writer);
+            value.serialize(writer);
         }
     }
 }
 
 impl<C> TdfTyped for &[C]
 where
-    C: Encodable + TdfTyped,
+    C: TdfSerialize + TdfTyped,
 {
     const TYPE: TdfType = TdfType::List;
 }
 
-impl<C> Decodable for Vec<C>
+impl<C> TdfDeserialize for Vec<C>
 where
-    C: Decodable + TdfTyped,
+    C: TdfDeserialize + TdfTyped,
 {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let value_type: TdfType = reader.read_type()?;
         let expected_type = C::TYPE;
         if value_type != expected_type {
@@ -849,7 +851,7 @@ where
         let length = reader.read_usize()?;
         let mut values = Vec::with_capacity(length);
         for _ in 0..length {
-            values.push(C::decode(reader)?);
+            values.push(C::deserialize(reader)?);
         }
         Ok(values)
     }
@@ -867,15 +869,15 @@ pub struct ObjectType {
     pub ty: u16,
 }
 
-impl Encodable for ObjectType {
-    fn encode(&self, w: &mut TdfWriter) {
+impl TdfSerialize for ObjectType {
+    fn serialize(&self, w: &mut TdfWriter) {
         w.write_u16(self.component);
         w.write_u16(self.ty);
     }
 }
 
-impl Decodable for ObjectType {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
+impl TdfDeserialize for ObjectType {
+    fn deserialize(r: &mut TdfReader) -> DecodeResult<Self> {
         let component = r.read_u16()?;
         let ty = r.read_u16()?;
         Ok(Self { component, ty })
@@ -894,16 +896,16 @@ pub struct ObjectId {
     pub id: u64,
 }
 
-impl Encodable for ObjectId {
-    fn encode(&self, w: &mut TdfWriter) {
-        self.ty.encode(w);
+impl TdfSerialize for ObjectId {
+    fn serialize(&self, w: &mut TdfWriter) {
+        self.ty.serialize(w);
         w.write_u64(self.id);
     }
 }
 
-impl Decodable for ObjectId {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self> {
-        let ty = ObjectType::decode(r)?;
+impl TdfDeserialize for ObjectId {
+    fn deserialize(r: &mut TdfReader) -> DecodeResult<Self> {
+        let ty = ObjectType::deserialize(r)?;
         let id = r.read_u64()?;
         Ok(Self { ty, id })
     }

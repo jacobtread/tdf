@@ -2,7 +2,7 @@
 //! packet buffers provides easy functions for all the different tdf types
 
 use super::{
-    codec::{Decodable, TdfTyped},
+    codec::{TdfDeserialize, TdfTyped},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
     types::{TdfMap, UNION_UNSET},
@@ -199,7 +199,7 @@ impl<'a> TdfReader<'a> {
     }
 
     /// Reads a map from the underlying buffer
-    pub fn read_map<K: Decodable + TdfTyped, V: Decodable + TdfTyped>(
+    pub fn read_map<K: TdfDeserialize + TdfTyped, V: TdfDeserialize + TdfTyped>(
         &mut self,
     ) -> DecodeResult<TdfMap<K, V>> {
         let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
@@ -238,14 +238,14 @@ impl<'a> TdfReader<'a> {
     /// and for the provided length
     ///
     /// `length` The length of the map (The number of entries)
-    pub fn read_map_body<K: Decodable, V: Decodable>(
+    pub fn read_map_body<K: TdfDeserialize, V: TdfDeserialize>(
         &mut self,
         length: usize,
     ) -> DecodeResult<TdfMap<K, V>> {
         let mut map: TdfMap<K, V> = TdfMap::with_capacity(length);
         for _ in 0..length {
-            let key: K = K::decode(self)?;
-            let value: V = V::decode(self)?;
+            let key: K = K::deserialize(self)?;
+            let value: V = V::deserialize(self)?;
             map.insert(key, value);
         }
         Ok(map)
@@ -318,9 +318,9 @@ impl<'a> TdfReader<'a> {
     /// reaches the correct value.
     ///
     /// `tag` The tag name to read
-    pub fn tag<C: Decodable + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<C> {
+    pub fn tag<C: TdfDeserialize + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<C> {
         self.until_tag(tag, C::TYPE)?;
-        C::decode(self)
+        C::deserialize(self)
     }
 
     /// Reads the provided tag from the buffer discarding values until it
@@ -328,7 +328,7 @@ impl<'a> TdfReader<'a> {
     /// back to where it was
     ///
     /// `tag` The tag name to read
-    pub fn try_tag<C: Decodable + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>> {
+    pub fn try_tag<C: TdfDeserialize + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>> {
         let start = self.cursor;
         match self.tag(tag) {
             Ok(value) => Ok(Some(value)),

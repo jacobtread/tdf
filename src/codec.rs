@@ -3,16 +3,16 @@
 
 use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfWriter};
 
-pub trait Decodable: Sized {
-    fn decode(r: &mut TdfReader) -> DecodeResult<Self>;
+pub trait TdfDeserialize: Sized {
+    fn deserialize(r: &mut TdfReader) -> DecodeResult<Self>;
 }
 
-pub trait Encodable: Sized {
-    fn encode(&self, w: &mut TdfWriter);
+pub trait TdfSerialize: Sized {
+    fn serialize(&self, w: &mut TdfWriter);
 
-    fn encode_bytes(&self) -> Vec<u8> {
+    fn serialize_bytes(&self) -> Vec<u8> {
         let mut output = TdfWriter::default();
-        self.encode(&mut output);
+        self.serialize(&mut output);
         output.into()
     }
 }

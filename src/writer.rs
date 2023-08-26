@@ -2,7 +2,7 @@
 //! to byte form without creating a new structure [`TdfWriter`]
 
 use super::{
-    codec::{Encodable, TdfTyped},
+    codec::{TdfSerialize, TdfTyped},
     tag::TdfType,
     types::{VarInt, UNION_UNSET},
 };
@@ -244,7 +244,7 @@ impl TdfWriter {
     /// `key`       The key of the union
     /// `value_tag` The tag for the value
     /// `value`     The value to write
-    pub fn tag_union_value<C: Encodable + TdfTyped>(
+    pub fn tag_union_value<C: TdfSerialize + TdfTyped>(
         &mut self,
         tag: &[u8],
         key: u8,
@@ -253,7 +253,7 @@ impl TdfWriter {
     ) {
         self.tag_union_start(tag, key);
         self.tag(value_tag, C::TYPE);
-        value.encode(self);
+        value.serialize(self);
     }
 
     /// Writes a new tag indicating a union with no value
@@ -267,9 +267,9 @@ impl TdfWriter {
     ///
     /// `tag`   The tag to write
     /// `value` The value to write
-    pub fn tag_value<C: Encodable + TdfTyped>(&mut self, tag: &[u8], value: &C) {
+    pub fn tag_value<C: TdfSerialize + TdfTyped>(&mut self, tag: &[u8], value: &C) {
         self.tag(tag, C::TYPE);
-        value.encode(self);
+        value.serialize(self);
     }
 
     /// Writes a tag for indiciating a list with no contents
@@ -284,9 +284,9 @@ impl TdfWriter {
 
     /// Slices are already borrowed so they confuse the `tag_value` type using this
     /// function instead makes them work
-    pub fn tag_slice_list<C: Encodable + TdfTyped>(&mut self, tag: &[u8], value: &[C]) {
+    pub fn tag_slice_list<C: TdfSerialize + TdfTyped>(&mut self, tag: &[u8], value: &[C]) {
         self.tag(tag, TdfType::List);
-        value.encode(self);
+        value.serialize(self);
     }
 
     /// Writes a tag for indiciating a var int list with no contents
@@ -317,13 +317,13 @@ impl TdfWriter {
     /// `values` The tuples of key value pairs to write
     pub fn tag_map_tuples<K, V>(&mut self, tag: &[u8], values: &[(K, V)])
     where
-        K: Encodable + TdfTyped,
-        V: Encodable + TdfTyped,
+        K: TdfSerialize + TdfTyped,
+        V: TdfSerialize + TdfTyped,
     {
         self.tag_map_start(tag, K::TYPE, V::TYPE, values.len());
         for (key, value) in values {
-            key.encode(self);
-            value.encode(self);
+            key.serialize(self);
+            value.serialize(self);
         }
     }
 
@@ -461,7 +461,7 @@ impl From<TdfWriter> for Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::TdfWriter;
-    use crate::{codec::Encodable, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
+    use crate::{codec::TdfSerialize, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
 
     /// Test for ensuring some common tags of different
     /// length are encoded to the correct values. The tags
@@ -685,7 +685,7 @@ mod test {
         assert_eq!(writer.buffer.len(), 5 + TEXT.len() + 1);
         assert_eq!(writer.buffer[3], TdfType::String as u8);
 
-        let length_bytes = (TEXT.len() + 1).encode_bytes();
+        let length_bytes = (TEXT.len() + 1).serialize_bytes();
 
         assert_eq!(&writer.buffer[4..4 + length_bytes.len()], &length_bytes);
         assert_eq!(&writer.buffer[4 + length_bytes.len()..], TEXT_BYTES);
@@ -933,7 +933,7 @@ mod test {
         // 3) tag 1) type 1) length TEXT.len()) bytes 1) terminator
         assert_eq!(writer.buffer.len(), 1 + TEXT.len() + 1);
 
-        let length_bytes = (TEXT.len() + 1).encode_bytes();
+        let length_bytes = (TEXT.len() + 1).serialize_bytes();
 
         assert_eq!(&writer.buffer[..length_bytes.len()], &length_bytes);
         assert_eq!(&writer.buffer[length_bytes.len()..], TEXT_BYTES);
