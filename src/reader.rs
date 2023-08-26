@@ -2,7 +2,7 @@
 //! packet buffers provides easy functions for all the different tdf types
 
 use super::{
-    codec::{Decodable, ValueType},
+    codec::{Decodable, TdfTyped},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
     types::{TdfMap, UNION_UNSET},
@@ -199,10 +199,10 @@ impl<'a> TdfReader<'a> {
     }
 
     /// Reads a map from the underlying buffer
-    pub fn read_map<K: Decodable + ValueType, V: Decodable + ValueType>(
+    pub fn read_map<K: Decodable + TdfTyped, V: Decodable + TdfTyped>(
         &mut self,
     ) -> DecodeResult<TdfMap<K, V>> {
-        let length: usize = self.read_map_header(K::value_type(), V::value_type())?;
+        let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
         self.read_map_body(length)
     }
 
@@ -318,8 +318,8 @@ impl<'a> TdfReader<'a> {
     /// reaches the correct value.
     ///
     /// `tag` The tag name to read
-    pub fn tag<C: Decodable + ValueType>(&mut self, tag: &[u8]) -> DecodeResult<C> {
-        self.until_tag(tag, C::value_type())?;
+    pub fn tag<C: Decodable + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<C> {
+        self.until_tag(tag, C::TYPE)?;
         C::decode(self)
     }
 
@@ -328,7 +328,7 @@ impl<'a> TdfReader<'a> {
     /// back to where it was
     ///
     /// `tag` The tag name to read
-    pub fn try_tag<C: Decodable + ValueType>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>> {
+    pub fn try_tag<C: Decodable + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>> {
         let start = self.cursor;
         match self.tag(tag) {
             Ok(value) => Ok(Some(value)),

@@ -2,7 +2,7 @@
 //! to byte form without creating a new structure [`TdfWriter`]
 
 use super::{
-    codec::{Encodable, ValueType},
+    codec::{Encodable, TdfTyped},
     tag::TdfType,
     types::{VarInt, UNION_UNSET},
 };
@@ -244,7 +244,7 @@ impl TdfWriter {
     /// `key`       The key of the union
     /// `value_tag` The tag for the value
     /// `value`     The value to write
-    pub fn tag_union_value<C: Encodable + ValueType>(
+    pub fn tag_union_value<C: Encodable + TdfTyped>(
         &mut self,
         tag: &[u8],
         key: u8,
@@ -252,7 +252,7 @@ impl TdfWriter {
         value: &C,
     ) {
         self.tag_union_start(tag, key);
-        self.tag(value_tag, C::value_type());
+        self.tag(value_tag, C::TYPE);
         value.encode(self);
     }
 
@@ -267,8 +267,8 @@ impl TdfWriter {
     ///
     /// `tag`   The tag to write
     /// `value` The value to write
-    pub fn tag_value<C: Encodable + ValueType>(&mut self, tag: &[u8], value: &C) {
-        self.tag(tag, C::value_type());
+    pub fn tag_value<C: Encodable + TdfTyped>(&mut self, tag: &[u8], value: &C) {
+        self.tag(tag, C::TYPE);
         value.encode(self);
     }
 
@@ -284,7 +284,7 @@ impl TdfWriter {
 
     /// Slices are already borrowed so they confuse the `tag_value` type using this
     /// function instead makes them work
-    pub fn tag_slice_list<C: Encodable + ValueType>(&mut self, tag: &[u8], value: &[C]) {
+    pub fn tag_slice_list<C: Encodable + TdfTyped>(&mut self, tag: &[u8], value: &[C]) {
         self.tag(tag, TdfType::List);
         value.encode(self);
     }
@@ -317,10 +317,10 @@ impl TdfWriter {
     /// `values` The tuples of key value pairs to write
     pub fn tag_map_tuples<K, V>(&mut self, tag: &[u8], values: &[(K, V)])
     where
-        K: Encodable + ValueType,
-        V: Encodable + ValueType,
+        K: Encodable + TdfTyped,
+        V: Encodable + TdfTyped,
     {
-        self.tag_map_start(tag, K::value_type(), V::value_type(), values.len());
+        self.tag_map_start(tag, K::TYPE, V::TYPE, values.len());
         for (key, value) in values {
             key.encode(self);
             value.encode(self);
