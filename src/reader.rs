@@ -30,11 +30,11 @@ macro_rules! impl_decode_var {
         if first < 128 {
             return Ok(result);
         }
-        let mut shift: u8 = 6;
+        let mut shift: u32 = 6;
         let mut byte: u8;
         loop {
             byte = $reader.read_byte()?;
-            result |= ((byte & 127) as $ty) << shift;
+            result |= ((byte & 127) as $ty).wrapping_shl(shift);
             if byte < 128 {
                 break;
             }
