@@ -3,8 +3,22 @@
 
 use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfWriter};
 
-pub trait TdfDeserialize: Sized {
-    fn deserialize(r: &mut TdfReader) -> DecodeResult<Self>;
+pub trait TdfDeserialize<'de>: Sized {
+    fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self>;
+}
+
+pub trait TdfDeserializeOwned: Sized {
+    fn deserialize_owned(r: &mut TdfReader<'_>) -> DecodeResult<Self>;
+}
+
+impl<T> TdfDeserialize<'_> for T
+where
+    T: TdfDeserializeOwned,
+{
+    #[inline]
+    fn deserialize(r: &mut TdfReader<'_>) -> DecodeResult<Self> {
+        Self::deserialize_owned(r)
+    }
 }
 
 pub trait TdfSerialize: Sized {

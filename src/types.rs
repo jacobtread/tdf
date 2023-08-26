@@ -1,6 +1,8 @@
 //! Types implementation for custom types used while encoding values
 //! with Blaze packets
 
+use crate::codec::TdfDeserializeOwned;
+
 use super::{
     codec::{TdfDeserialize, TdfSerialize, TdfTyped},
     error::{DecodeError, DecodeResult},
@@ -82,7 +84,7 @@ where
     }
 }
 
-impl<C> TdfDeserialize for VarIntList<C>
+impl<C> TdfDeserialize<'_> for VarIntList<C>
 where
     C: VarInt,
 {
@@ -175,9 +177,9 @@ where
     }
 }
 
-impl<C> TdfDeserialize for Union<C>
+impl<'de, C> TdfDeserialize<'de> for Union<C>
 where
-    C: TdfDeserialize + TdfTyped,
+    C: TdfDeserialize<'de> + TdfTyped,
 {
     fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let key = reader.read_byte()?;
@@ -207,15 +209,7 @@ where
 pub const UNION_UNSET: u8 = 0x7F;
 
 /// Trait implemented by VarInt types
-pub trait VarInt: PartialEq + Eq + Debug + TdfSerialize + TdfDeserialize {}
-
-/// Trait that must be implemented on a type for it to
-/// be considered a map key
-pub trait MapKey: PartialEq + Eq + Debug {}
-
-impl MapKey for &'_ str {}
-impl MapKey for String {}
-impl<T: VarInt> MapKey for T {}
+pub trait VarInt: PartialEq + Eq + Debug + TdfSerialize + for<'a> TdfDeserialize<'a> {}
 
 /// Macro for implementing the var int trait in bulk easily
 macro_rules! impl_var_int {
@@ -556,10 +550,10 @@ where
     }
 }
 
-impl<K, V> TdfDeserialize for TdfMap<K, V>
+impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
 where
-    K: TdfDeserialize + TdfTyped,
-    V: TdfDeserialize + TdfTyped,
+    K: TdfDeserialize<'de> + TdfTyped,
+    V: TdfDeserialize<'de> + TdfTyped,
 {
     #[inline]
     fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
@@ -592,9 +586,9 @@ impl TdfSerialize for f32 {
     }
 }
 
-impl TdfDeserialize for f32 {
+impl TdfDeserializeOwned for f32 {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_f32()
     }
 }
@@ -610,9 +604,9 @@ impl TdfSerialize for bool {
     }
 }
 
-impl TdfDeserialize for bool {
+impl TdfDeserializeOwned for bool {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_bool()
     }
 }
@@ -628,7 +622,7 @@ impl TdfTyped for bool {
 /// `$b` The type to forward to
 macro_rules! forward_codec {
     ($a:ident, $b:ident) => {
-        impl TdfDeserialize for $a {
+        impl<'de> TdfDeserialize<'de> for $a {
             #[inline]
             fn deserialize(
                 reader: &mut $crate::reader::TdfReader,
@@ -659,9 +653,9 @@ impl TdfSerialize for u8 {
     }
 }
 
-impl TdfDeserialize for u8 {
+impl TdfDeserializeOwned for u8 {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u8()
     }
 }
@@ -673,9 +667,9 @@ impl TdfSerialize for u16 {
     }
 }
 
-impl TdfDeserialize for u16 {
+impl TdfDeserializeOwned for u16 {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u16()
     }
 }
@@ -687,9 +681,9 @@ impl TdfSerialize for u32 {
     }
 }
 
-impl TdfDeserialize for u32 {
+impl TdfDeserializeOwned for u32 {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u32()
     }
 }
@@ -701,9 +695,9 @@ impl TdfSerialize for u64 {
     }
 }
 
-impl TdfDeserialize for u64 {
+impl TdfDeserializeOwned for u64 {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_u64()
     }
 }
@@ -715,9 +709,9 @@ impl TdfSerialize for usize {
     }
 }
 
-impl TdfDeserialize for usize {
+impl TdfDeserializeOwned for usize {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_usize()
     }
 }
@@ -762,9 +756,9 @@ impl TdfSerialize for String {
     }
 }
 
-impl TdfDeserialize for String {
+impl TdfDeserializeOwned for String {
     #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.read_string()
     }
 }
@@ -777,24 +771,24 @@ impl TdfTyped for String {
 /// to differenciate between a list of VarInts and a Blob of straight
 /// bytes
 #[derive(Default, Debug, Clone)]
-pub struct Blob(pub Vec<u8>);
+pub struct Blob<'de>(pub &'de [u8]);
 
-impl TdfSerialize for Blob {
+impl TdfSerialize for Blob<'_> {
     fn serialize(&self, output: &mut TdfWriter) {
         output.write_usize(self.0.len());
         output.write_slice(&self.0);
     }
 }
 
-impl TdfDeserialize for Blob {
+impl<'de> TdfDeserialize<'de> for Blob<'de> {
     fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let length = reader.read_usize()?;
         let bytes = reader.read_slice(length)?;
-        Ok(Blob(bytes.to_vec()))
+        Ok(Blob(bytes))
     }
 }
 
-impl TdfTyped for Blob {
+impl TdfTyped for Blob<'_> {
     const TYPE: TdfType = TdfType::Blob;
 }
 
@@ -834,9 +828,9 @@ where
     const TYPE: TdfType = TdfType::List;
 }
 
-impl<C> TdfDeserialize for Vec<C>
+impl<'de, C> TdfDeserialize<'de> for Vec<C>
 where
-    C: TdfDeserialize + TdfTyped,
+    C: TdfDeserialize<'de> + TdfTyped,
 {
     fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
         let value_type: TdfType = reader.read_type()?;
@@ -876,8 +870,8 @@ impl TdfSerialize for ObjectType {
     }
 }
 
-impl TdfDeserialize for ObjectType {
-    fn deserialize(r: &mut TdfReader) -> DecodeResult<Self> {
+impl TdfDeserializeOwned for ObjectType {
+    fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
         let component = r.read_u16()?;
         let ty = r.read_u16()?;
         Ok(Self { component, ty })
@@ -903,9 +897,9 @@ impl TdfSerialize for ObjectId {
     }
 }
 
-impl TdfDeserialize for ObjectId {
-    fn deserialize(r: &mut TdfReader) -> DecodeResult<Self> {
-        let ty = ObjectType::deserialize(r)?;
+impl TdfDeserializeOwned for ObjectId {
+    fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+        let ty = ObjectType::deserialize_owned(r)?;
         let id = r.read_u64()?;
         Ok(Self { ty, id })
     }

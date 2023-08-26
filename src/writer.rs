@@ -4,7 +4,7 @@
 use super::{
     codec::{TdfSerialize, TdfTyped},
     tag::TdfType,
-    types::{VarInt, UNION_UNSET},
+    types::UNION_UNSET,
 };
 
 /// Writer implementation for writing values to an underlying buffer

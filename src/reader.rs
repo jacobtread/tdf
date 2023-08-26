@@ -44,10 +44,10 @@ macro_rules! impl_decode_var {
     }};
 }
 
-impl<'a> TdfReader<'a> {
+impl<'de> TdfReader<'de> {
     /// Creates a new reader over the provided slice of bytes with
     /// the default cursor position at zero
-    pub fn new(buffer: &'a [u8]) -> Self {
+    pub fn new(buffer: &'de [u8]) -> Self {
         Self { buffer, cursor: 0 }
     }
 
@@ -199,7 +199,7 @@ impl<'a> TdfReader<'a> {
     }
 
     /// Reads a map from the underlying buffer
-    pub fn read_map<K: TdfDeserialize + TdfTyped, V: TdfDeserialize + TdfTyped>(
+    pub fn read_map<K: TdfDeserialize<'de> + TdfTyped, V: TdfDeserialize<'de> + TdfTyped>(
         &mut self,
     ) -> DecodeResult<TdfMap<K, V>> {
         let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
@@ -238,7 +238,7 @@ impl<'a> TdfReader<'a> {
     /// and for the provided length
     ///
     /// `length` The length of the map (The number of entries)
-    pub fn read_map_body<K: TdfDeserialize, V: TdfDeserialize>(
+    pub fn read_map_body<K: TdfDeserialize<'de>, V: TdfDeserialize<'de>>(
         &mut self,
         length: usize,
     ) -> DecodeResult<TdfMap<K, V>> {
@@ -318,7 +318,10 @@ impl<'a> TdfReader<'a> {
     /// reaches the correct value.
     ///
     /// `tag` The tag name to read
-    pub fn tag<C: TdfDeserialize + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<C> {
+    pub fn tag<C>(&mut self, tag: &[u8]) -> DecodeResult<C>
+    where
+        C: TdfDeserialize<'de> + TdfTyped,
+    {
         self.until_tag(tag, C::TYPE)?;
         C::deserialize(self)
     }
@@ -328,7 +331,10 @@ impl<'a> TdfReader<'a> {
     /// back to where it was
     ///
     /// `tag` The tag name to read
-    pub fn try_tag<C: TdfDeserialize + TdfTyped>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>> {
+    pub fn try_tag<C>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>>
+    where
+        C: TdfDeserialize<'de> + TdfTyped,
+    {
         let start = self.cursor;
         match self.tag(tag) {
             Ok(value) => Ok(Some(value)),
