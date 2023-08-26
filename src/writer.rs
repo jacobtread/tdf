@@ -475,7 +475,7 @@ impl From<TdfWriter> for Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::TdfWriter;
-    use crate::blaze::pk::{codec::Encodable, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
+    use crate::{codec::Encodable, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
 
     /// Test for ensuring some common tags of different
     /// length are encoded to the correct values. The tags

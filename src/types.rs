@@ -1,8 +1,6 @@
 //! Types implementation for custom types used while encoding values
 //! with Blaze packets
 
-use crate::value_type;
-
 use super::{
     codec::{Decodable, Encodable, ValueType},
     error::{DecodeError, DecodeResult},
@@ -607,7 +605,11 @@ impl Decodable for f32 {
     }
 }
 
-value_type!(f32, TdfType::Float);
+impl ValueType for f32 {
+    fn value_type() -> TdfType {
+        TdfType::Float
+    }
+}
 
 impl Encodable for bool {
     #[inline]
@@ -623,7 +625,11 @@ impl Decodable for bool {
     }
 }
 
-value_type!(bool, TdfType::VarInt);
+impl ValueType for bool {
+    fn value_type() -> TdfType {
+        TdfType::VarInt
+    }
+}
 
 /// Macro for forwarding the encode and decodes of a type to
 /// another types encoder and decoder
@@ -634,9 +640,7 @@ macro_rules! forward_codec {
     ($a:ident, $b:ident) => {
         impl Decodable for $a {
             #[inline]
-            fn decode(
-                reader: &mut $crate::blaze::pk::reader::TdfReader,
-            ) -> $crate::blaze::pk::error::DecodeResult<Self> {
+            fn decode(reader: &mut $crate::reader::TdfReader) -> $crate::error::DecodeResult<Self> {
                 Ok($b::decode(reader)? as $a)
             }
         }
@@ -648,7 +652,7 @@ macro_rules! forward_codec {
             }
         }
 
-        impl $crate::blaze::pk::codec::ValueType for $a {
+        impl $crate::codec::ValueType for $a {
             #[inline]
             fn value_type() -> TdfType {
                 $b::value_type()
@@ -729,11 +733,31 @@ impl Decodable for usize {
     }
 }
 
-value_type!(u8, TdfType::VarInt);
-value_type!(u16, TdfType::VarInt);
-value_type!(u32, TdfType::VarInt);
-value_type!(u64, TdfType::VarInt);
-value_type!(usize, TdfType::VarInt);
+impl ValueType for u8 {
+    fn value_type() -> TdfType {
+        TdfType::VarInt
+    }
+}
+impl ValueType for u16 {
+    fn value_type() -> TdfType {
+        TdfType::VarInt
+    }
+}
+impl ValueType for u32 {
+    fn value_type() -> TdfType {
+        TdfType::VarInt
+    }
+}
+impl ValueType for u64 {
+    fn value_type() -> TdfType {
+        TdfType::VarInt
+    }
+}
+impl ValueType for usize {
+    fn value_type() -> TdfType {
+        TdfType::VarInt
+    }
+}
 
 forward_codec!(i8, u8);
 forward_codec!(i16, u16);
@@ -741,14 +765,18 @@ forward_codec!(i32, u32);
 forward_codec!(i64, u64);
 forward_codec!(isize, usize);
 
-impl Encodable for &'_ str {
+impl Encodable for &str {
     #[inline]
     fn encode(&self, output: &mut TdfWriter) {
         output.write_str(self)
     }
 }
 
-value_type!(&'_ str, TdfType::String);
+impl ValueType for &str {
+    fn value_type() -> TdfType {
+        TdfType::String
+    }
+}
 
 impl Encodable for String {
     #[inline]
@@ -764,7 +792,11 @@ impl Decodable for String {
     }
 }
 
-value_type!(String, TdfType::String);
+impl ValueType for String {
+    fn value_type() -> TdfType {
+        TdfType::String
+    }
+}
 
 /// Blob structure wrapping a vec of bytes. This implementation is
 /// to differenciate between a list of VarInts and a Blob of straight
@@ -787,7 +819,11 @@ impl Decodable for Blob {
     }
 }
 
-value_type!(Blob, TdfType::Blob);
+impl ValueType for Blob {
+    fn value_type() -> TdfType {
+        TdfType::Blob
+    }
+}
 
 /// Vec List encoding for encodable items items are required
 /// to have the ValueType trait in order to write the list header
@@ -928,7 +964,7 @@ mod test {
 
     use std::time::Instant;
 
-    use crate::blaze::pk::types::TdfMap;
+    use crate::types::TdfMap;
 
     /// Tests ordering a map
     #[test]
