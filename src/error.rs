@@ -2,7 +2,7 @@
 //! type alias [`DecodeResult`]
 
 use super::tag::{Tag, TdfType};
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, str::Utf8Error, string::FromUtf8Error};
 
 /// Error type for errors that can occur while decoding a value
 /// using the tdf decode
@@ -49,6 +49,9 @@ pub enum DecodeError {
         /// The remaining bytes in the reader slice
         remaining: usize,
     },
+
+    /// Attempted to decode a str slice but the content wasn't valid utf-8
+    InvalidUtf8Value(Utf8Error),
 
     /// Other error type with custom message
     Other(&'static str),
@@ -99,6 +102,7 @@ impl Display for DecodeError {
                     cursor, wanted, remaining
                 )
             }
+            DecodeError::InvalidUtf8Value(err) => err.fmt(f),
             DecodeError::Other(err) => f.write_str(err),
         }
     }

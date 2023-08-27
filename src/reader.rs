@@ -81,7 +81,7 @@ impl<'de> TdfReader<'de> {
     /// buffer that is after the cursor position
     ///
     /// `length` The length of the slice to take
-    pub fn read_slice(&mut self, length: usize) -> DecodeResult<&[u8]> {
+    pub fn read_slice(&mut self, length: usize) -> DecodeResult<&'de [u8]> {
         // Ensure we have the required number of bytes
         if self.cursor + length > self.buffer.len() {
             return Err(DecodeError::UnexpectedEof {
@@ -177,10 +177,21 @@ impl<'de> TdfReader<'de> {
 
     /// Reads a blob from the buffer. The blob is a slice prefixed
     /// by a length value
-    pub fn read_blob(&mut self) -> DecodeResult<&[u8]> {
+    pub fn read_blob(&mut self) -> DecodeResult<&'de [u8]> {
         let length: usize = self.read_usize()?;
         let bytes: &[u8] = self.read_slice(length)?;
         Ok(bytes)
+    }
+
+    pub fn read_str(&mut self) -> DecodeResult<&'de str> {
+        let bytes: &[u8] = self.read_blob()?;
+        let text: &str = std::str::from_utf8(bytes).map_err(DecodeError::InvalidUtf8Value)?;
+
+        if text.is_empty() {
+            return Err(DecodeError::Other("String value had zero length"));
+        }
+
+        Ok(&text[..text.len() - 1])
     }
 
     /// Reads a string from the underlying buffer
@@ -200,9 +211,11 @@ impl<'de> TdfReader<'de> {
     }
 
     /// Reads a map from the underlying buffer
-    pub fn read_map<K: TdfDeserialize<'de> + TdfTyped, V: TdfDeserialize<'de> + TdfTyped>(
-        &mut self,
-    ) -> DecodeResult<TdfMap<K, V>> {
+    pub fn read_map<K, V>(&mut self) -> DecodeResult<TdfMap<K, V>>
+    where
+        K: TdfDeserialize<'de> + TdfTyped + Ord,
+        V: TdfDeserialize<'de> + TdfTyped,
+    {
         let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
         self.read_map_body(length)
     }
@@ -239,10 +252,11 @@ impl<'de> TdfReader<'de> {
     /// and for the provided length
     ///
     /// `length` The length of the map (The number of entries)
-    pub fn read_map_body<K: TdfDeserialize<'de>, V: TdfDeserialize<'de>>(
-        &mut self,
-        length: usize,
-    ) -> DecodeResult<TdfMap<K, V>> {
+    pub fn read_map_body<K, V>(&mut self, length: usize) -> DecodeResult<TdfMap<K, V>>
+    where
+        K: TdfDeserialize<'de> + Ord,
+        V: TdfDeserialize<'de>,
+    {
         let mut map: TdfMap<K, V> = TdfMap::with_capacity(length);
         for _ in 0..length {
             let key: K = K::deserialize(self)?;
@@ -456,7 +470,7 @@ impl<'de> TdfReader<'de> {
     /// Skips a union value
     pub fn skip_union(&mut self) -> DecodeResult<()> {
         let ty = self.read_byte()?;
-        if ty != TaggedUnion::UNSET_KEY {
+        if ty != TaggedUnion::<()>::UNSET_KEY {
             self.skip()?;
         }
         Ok(())
@@ -666,7 +680,7 @@ impl<'de> TdfReader<'de> {
             }
             TdfType::Union => {
                 let ty = self.read_byte()?;
-                if ty == TaggedUnion::UNSET_KEY {
+                if ty == TaggedUnion::<()>::UNSET_KEY {
                     out.push_str("Union(Unset)")
                 } else {
                     let tag = self.read_tag()?;

@@ -7,7 +7,7 @@ use serde::Serialize;
 
 impl<K, V> Serialize for TdfMap<K, V>
 where
-    K: Serialize,
+    K: Serialize + Ord,
     V: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -22,10 +22,7 @@ where
     }
 }
 
-impl<T> Serialize for VarIntList<T>
-where
-    T: Serialize,
-{
+impl Serialize for VarIntList {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -34,7 +31,7 @@ where
     }
 }
 
-impl Serialize for Blob {
+impl Serialize for Blob<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

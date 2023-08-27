@@ -261,7 +261,7 @@ impl TdfSerializer {
     ///
     /// `tag` The tag to write
     pub fn tag_union_unset(&mut self, tag: &[u8]) {
-        self.tag_union_start(tag, TaggedUnion::UNSET_KEY);
+        self.tag_union_start(tag, TaggedUnion::<()>::UNSET_KEY);
     }
 
     /// Writes a tag and its value where the value implements ValueType
@@ -734,7 +734,7 @@ mod test {
         writer.tag_union_unset(b"TEST");
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::Union as u8);
-        assert_eq!(writer.buffer[4], TaggedUnion::UNSET_KEY);
+        assert_eq!(writer.buffer[4], TaggedUnion::<()>::UNSET_KEY);
         writer.clear();
 
         writer.tag_union_value(b"TEST", 5, b"TEST2", &15);
