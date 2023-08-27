@@ -1,5 +1,7 @@
 //! Implementation for [`Tag`]s and [`TdfType`]s
 
+use crate::error::DecodeResult;
+
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};
 

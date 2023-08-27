@@ -367,6 +367,22 @@ impl<'de> TdfReader<'de> {
         TdfType::try_from(value)
     }
 
+    /// Reads the next TdfType value checking that it
+    /// matches the provided type and returns an invalid
+    /// type error if the type doesn't match
+    pub fn expect_type(&mut self, ty: TdfType) -> DecodeResult<()> {
+        let value_type = self.read_type()?;
+
+        if value_type != ty {
+            Err(DecodeError::InvalidType {
+                expected: ty,
+                actual: value_type,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     /// Reads a tag from the underlying buffer
     pub fn read_tag(&mut self) -> DecodeResult<Tagged> {
         let input: [u8; 4] = self.read_byte_4()?;

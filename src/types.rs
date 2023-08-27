@@ -799,15 +799,15 @@ pub mod string {
 
     impl<'de> TdfDeserialize<'de> for &'de str {
         #[inline]
-        fn deserialize(r: &mut crate::reader::TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self> {
             r.read_str()
         }
     }
 
     impl TdfSerialize for &str {
         #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_str(self)
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_str(self)
         }
     }
 
@@ -836,92 +836,106 @@ pub mod string {
     }
 }
 
-/// Blob structure wrapping a vec of bytes. This implementation is
-/// to differenciate between a list of VarInts and a Blob of straight
-/// bytes
-#[derive(Default, Debug, Clone)]
-pub struct Blob<'de>(pub &'de [u8]);
+mod blob {
+    use crate::{
+        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
 
-impl TdfSerialize for Blob<'_> {
-    fn serialize(&self, output: &mut TdfSerializer) {
-        output.write_usize(self.0.len());
-        output.write_slice(&self.0);
-    }
-}
+    /// [Blob] is a structure representing a variable length chunk
+    /// of bytes with the length deliminated by a variable-length integer
+    /// followed by the chunk of bytes
+    ///
+    /// The [String] structure uses the same underlying logic but wraps
+    /// extra utf8 parsing on top
+    #[derive(Default, Debug, Clone, PartialEq, Eq)]
+    pub struct Blob<'de>(pub &'de [u8]);
 
-impl<'de> TdfDeserialize<'de> for Blob<'de> {
-    fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
-        let length = reader.read_usize()?;
-        let bytes = reader.read_slice(length)?;
-        Ok(Blob(bytes))
-    }
-}
-
-impl TdfTyped for Blob<'_> {
-    const TYPE: TdfType = TdfType::Blob;
-}
-
-/// Vec List encoding for encodable items items are required
-/// to have the ValueType trait in order to write the list header
-impl<C> TdfSerialize for Vec<C>
-where
-    C: TdfSerialize + TdfTyped,
-{
-    fn serialize(&self, writer: &mut TdfSerializer) {
-        writer.write_type(C::TYPE);
-        writer.write_usize(self.len());
-        for value in self {
-            value.serialize(writer);
+    impl AsRef<[u8]> for Blob<'_> {
+        fn as_ref(&self) -> &[u8] {
+            self.0
         }
     }
-}
 
-/// Support for encoding slices of encodable items as lists
-impl<C> TdfSerialize for &[C]
-where
-    C: TdfSerialize + TdfTyped,
-{
-    fn serialize(&self, writer: &mut TdfSerializer) {
-        writer.write_type(C::TYPE);
-        writer.write_usize(self.len());
-        for value in self.iter() {
-            value.serialize(writer);
+    impl TdfSerialize for Blob<'_> {
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_usize(self.0.len());
+            output.write_slice(self.0);
         }
+    }
+
+    impl<'de> TdfDeserialize<'de> for Blob<'de> {
+        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            let bytes = reader.read_blob()?;
+            Ok(Blob(bytes))
+        }
+    }
+
+    impl TdfTyped for Blob<'_> {
+        const TYPE: TdfType = TdfType::Blob;
     }
 }
 
-impl<C> TdfTyped for &[C]
-where
-    C: TdfSerialize + TdfTyped,
-{
-    const TYPE: TdfType = TdfType::List;
-}
+mod list {
+    use crate::{
+        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
 
-impl<'de, C> TdfDeserialize<'de> for Vec<C>
-where
-    C: TdfDeserialize<'de> + TdfTyped,
-{
-    fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
-        let value_type: TdfType = reader.read_type()?;
-        let expected_type = C::TYPE;
-        if value_type != expected_type {
-            return Err(DecodeError::InvalidType {
-                expected: expected_type,
-                actual: value_type,
-            });
-        }
+    impl<'de, C> TdfDeserialize<'de> for Vec<C>
+    where
+        C: TdfDeserialize<'de> + TdfTyped,
+    {
+        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            reader.expect_type(C::TYPE)?;
 
-        let length = reader.read_usize()?;
-        let mut values = Vec::with_capacity(length);
-        for _ in 0..length {
-            values.push(C::deserialize(reader)?);
+            let length = reader.read_usize()?;
+            let mut values = Vec::with_capacity(length);
+
+            for _ in 0..length {
+                values.push(C::deserialize(reader)?);
+            }
+            Ok(values)
         }
-        Ok(values)
     }
-}
 
-impl<C> TdfTyped for Vec<C> {
-    const TYPE: TdfType = TdfType::List;
+    impl<V> TdfSerialize for Vec<V>
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        #[inline]
+        fn serialize(&self, w: &mut TdfSerializer) {
+            self.as_slice().serialize(w)
+        }
+    }
+
+    impl<V> TdfTyped for Vec<V> {
+        const TYPE: TdfType = TdfType::List;
+    }
+
+    impl<V> TdfSerialize for &[V]
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_type(V::TYPE);
+            w.write_usize(self.len());
+            self.iter().for_each(|value| value.serialize(w));
+        }
+    }
+
+    impl<C> TdfTyped for &[C]
+    where
+        C: TdfSerialize + TdfTyped,
+    {
+        const TYPE: TdfType = TdfType::List;
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
