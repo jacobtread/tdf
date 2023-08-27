@@ -81,8 +81,21 @@
 //!
 //! #### List Functions
 //!
+//! Tagging functions for writing list types
+//!
 //! * [TdfSerializer::tag_list_start] - Special functions for writing a list header (Used to manually write list impl for complex types)
 //! * [TdfSerializer::tag_list_empty] - Special function for writing an empty list
+//! * [TdfSerializer::tag_list_slice] - Special function for writing a list using a slice of serializable elements
+//! * [TdfSerializer::tag_list_slice_ref] - Special function for writing a list using a slice of references to serializable elements
+//!
+//! ##### List Iterator Functions
+//!
+//! * [TdfSerializer::tag_list_iter] - Special function for writing a list using a iterator
+//! * [TdfSerializer::tag_list_iter_ref] - Special function for writing a list using a iterator of references
+//! * [TdfSerializer::tag_list_iter_owned] - Special function for writing a list using a iterator of owned values (i.e primitives)
+//!
+//! > Iterators use by these functions must implement [ExactSizeIterator] otherwise the size cannot be
+//! > written for the list header
 use crate::{
     codec::TdfSerializeOwned,
     tag::{RawTag, Tagged},
@@ -296,25 +309,45 @@ impl TdfSerializer {
         self.tag_alt(tag, value);
     }
 
-    // Union tagging
-
-    pub fn tag_union_start(&mut self, tag: RawTag, key: u8) {
-        Tagged::serialize_raw(self, tag, TdfType::TaggedUnion);
-        self.write_byte(key);
-    }
-
     #[inline]
-    pub fn tag_union_value<C>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &C)
+    pub fn tag_list_slice_ref<V>(&mut self, tag: RawTag, value: &[&V])
     where
-        C: TdfSerialize + TdfTyped,
+        V: TdfSerialize + TdfTyped,
     {
-        self.tag_union_start(tag, key);
-        self.tag_ref(value_tag, value);
+        self.tag_list_start(tag, V::TYPE, value.len());
+        value.iter().for_each(|value| value.serialize(self));
     }
 
     #[inline]
-    pub fn tag_union_unset(&mut self, tag: RawTag) {
-        self.tag_union_start(tag, TaggedUnion::<()>::UNSET_KEY);
+    pub fn tag_list_iter<'i, I, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = V> + ExactSizeIterator,
+        V: TdfSerialize + TdfTyped + 'i,
+    {
+        self.tag_list_start(tag, V::TYPE, iter.len());
+        iter.for_each(|value| value.serialize(self));
+    }
+
+    /// Tag list iter but for ref values
+    #[inline]
+    pub fn tag_list_iter_ref<'i, I, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = &'i V> + ExactSizeIterator,
+        V: TdfSerialize + TdfTyped + 'i,
+    {
+        self.tag_list_start(tag, V::TYPE, iter.len());
+        iter.for_each(|value| value.serialize(self));
+    }
+
+    /// Tag list iter but for owned values
+    #[inline]
+    pub fn tag_list_iter_owned<'i, I, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = V> + ExactSizeIterator,
+        V: TdfSerializeOwned + TdfTyped + 'i,
+    {
+        self.tag_list_start(tag, V::TYPE, iter.len());
+        iter.for_each(|value| value.serialize_owned(self));
     }
 
     // Var int list tagging
@@ -341,6 +374,27 @@ impl TdfSerializer {
             key.serialize(self);
             value.serialize(self);
         }
+    }
+
+    // Union tagging
+
+    pub fn tag_union_start(&mut self, tag: RawTag, key: u8) {
+        Tagged::serialize_raw(self, tag, TdfType::TaggedUnion);
+        self.write_byte(key);
+    }
+
+    #[inline]
+    pub fn tag_union_value<C>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &C)
+    where
+        C: TdfSerialize + TdfTyped,
+    {
+        self.tag_union_start(tag, key);
+        self.tag_ref(value_tag, value);
+    }
+
+    #[inline]
+    pub fn tag_union_unset(&mut self, tag: RawTag) {
+        self.tag_union_start(tag, TaggedUnion::<()>::UNSET_KEY);
     }
 
     #[inline]
