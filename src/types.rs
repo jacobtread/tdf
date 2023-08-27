@@ -366,7 +366,7 @@ pub mod string {
 
 pub mod blob {
     use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        codec::{TdfDeserialize, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -396,9 +396,9 @@ pub mod blob {
     }
 
     impl TdfSerialize for Blob<'_> {
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_usize(self.0.len());
-            output.write_slice(self.0);
+        fn serialize(&self, w: &mut TdfSerializer) {
+            self.0.len().serialize_owned(w);
+            w.write_slice(self.0);
         }
     }
 
@@ -409,7 +409,7 @@ pub mod blob {
 
 pub mod list {
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -453,7 +453,7 @@ pub mod list {
     {
         fn serialize(&self, w: &mut TdfSerializer) {
             w.write_type(V::TYPE);
-            w.write_usize(self.len());
+            self.len().serialize_owned(w);
             self.iter().for_each(|value| value.serialize(w));
         }
     }
@@ -969,7 +969,7 @@ pub mod var_int_list {
 
     impl TdfSerialize for VarIntList {
         fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_usize(self.0.len());
+            self.0.len().serialize_owned(w);
             self.0
                 .iter()
                 .copied()
@@ -984,7 +984,7 @@ pub mod var_int_list {
 
 pub mod object_type {
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -1019,8 +1019,8 @@ pub mod object_type {
 
     impl TdfSerialize for ObjectType {
         fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_u16(self.component);
-            w.write_u16(self.ty);
+            self.component.serialize_owned(w);
+            self.ty.serialize_owned(w);
         }
     }
 
@@ -1067,7 +1067,7 @@ pub mod object_type {
 pub mod object_id {
     use super::object_type::ObjectType;
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -1110,7 +1110,7 @@ pub mod object_id {
     impl TdfSerialize for ObjectId {
         fn serialize(&self, w: &mut TdfSerializer) {
             self.ty.serialize(w);
-            w.write_u64(self.id);
+            self.id.serialize_owned(w);
         }
     }
 

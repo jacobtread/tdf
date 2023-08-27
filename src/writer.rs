@@ -17,26 +17,6 @@ pub struct TdfSerializer {
     pub buffer: Vec<u8>,
 }
 
-/// Macro for implementing VarInt encoding for a specific number type
-/// to prevent the need for casting up to a u64 for the u16 and u32 types
-macro_rules! impl_encode_var {
-    ($value:ident, $output:ident) => {
-        if $value < 64 {
-            $output.write_byte($value as u8);
-            return;
-        }
-        let mut byte: u8 = (($value & 63) as u8) | 128;
-        $output.write_byte(byte);
-        let mut cur_shift = $value >> 6;
-        while cur_shift >= 128 {
-            byte = ((cur_shift & 127) | 128) as u8;
-            cur_shift >>= 7;
-            $output.write_byte(byte);
-        }
-        $output.write_byte(cur_shift as u8)
-    };
-}
-
 impl TdfSerializer {
     /// Writes a single byte to the underlying buffer. This just
     /// appends the byte to the buffer.
@@ -131,7 +111,7 @@ impl TdfSerializer {
     /// `value` The value to write
     pub fn tag_u16(&mut self, tag: &[u8], value: u16) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u16(value);
+        value.serialize_owned(self);
     }
 
     /// Writes a new tag where the value is a u32 value using
@@ -141,7 +121,7 @@ impl TdfSerializer {
     /// `value` The value to write
     pub fn tag_u32(&mut self, tag: &[u8], value: u32) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u32(value);
+        value.serialize_owned(self);
     }
 
     /// Writes a new tag where the value is a u64 value using
@@ -151,7 +131,7 @@ impl TdfSerializer {
     /// `value` The value to write
     pub fn tag_u64(&mut self, tag: &[u8], value: u64) {
         self.tag(tag, TdfType::VarInt);
-        self.write_u64(value);
+        value.serialize_owned(self);
     }
 
     /// Writes a new tag where the value is a usize value using
@@ -161,7 +141,7 @@ impl TdfSerializer {
     /// `value` The value to write
     pub fn tag_usize(&mut self, tag: &[u8], value: usize) {
         self.tag(tag, TdfType::VarInt);
-        self.write_usize(value);
+        value.serialize_owned(self);
     }
 
     /// Writes a new tag where the value is an empty string
@@ -226,7 +206,7 @@ impl TdfSerializer {
     pub fn tag_list_start(&mut self, tag: &[u8], ty: TdfType, length: usize) {
         self.tag(tag, TdfType::List);
         self.write_type(ty);
-        self.write_usize(length);
+        length.serialize_owned(self);
     }
 
     /// Writes a new tag indicating that a union with the provided key is
@@ -309,7 +289,7 @@ impl TdfSerializer {
         self.tag(tag, TdfType::Map);
         self.write_type(key);
         self.write_type(value);
-        self.write_usize(length);
+        length.serialize_owned(self);
     }
 
     /// Writes a list of tuples as a map of key value paris
@@ -330,59 +310,21 @@ impl TdfSerializer {
 
     pub fn tag_object_type(&mut self, tag: &[u8], component: u16, ty: u16) {
         self.tag(tag, TdfType::ObjectType);
-        self.write_u16(component);
-        self.write_u16(ty);
+        component.serialize_owned(self);
+        ty.serialize_owned(self);
     }
 
     pub fn tag_object_id(&mut self, tag: &[u8], component: u16, ty: u16, id: u64) {
         self.tag(tag, TdfType::ObjectId);
-        self.write_u16(component);
-        self.write_u16(ty);
-        self.write_u64(id);
+        component.serialize_owned(self);
+        ty.serialize_owned(self);
+        id.serialize_owned(self);
     }
 
     /// Writes an empty string. This is simply two bytes a 1 and a 0 which
     /// indicate a string consisting of only a null terminator
     pub fn write_empty_str(&mut self) {
         self.buffer.extend_from_slice(&[1, 0])
-    }
-
-    /// Writes a u16 value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_u16(&mut self, value: u16) {
-        if value < 64 {
-            self.buffer.push(value as u8);
-            return;
-        }
-        let mut byte: u8 = ((value & 63) as u8) | 128;
-        let mut shift: u16 = value >> 6;
-        self.buffer.push(byte);
-        byte = ((shift & 127) | 128) as u8;
-        shift >>= 7;
-        self.buffer.push(byte);
-        self.buffer.push(shift as u8);
-    }
-
-    /// Writes a u32 value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_u32(&mut self, value: u32) {
-        impl_encode_var!(value, self);
-    }
-
-    /// Writes a u64 value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_u64(&mut self, value: u64) {
-        impl_encode_var!(value, self);
-    }
-
-    /// Writes a usize value using the VarInt encoding
-    ///
-    /// `value` The value to write
-    pub fn write_usize(&mut self, value: usize) {
-        impl_encode_var!(value, self);
     }
 
     /// Writes a string to the underlying buffer. The bytes
@@ -399,7 +341,7 @@ impl TdfSerializer {
             _ => bytes.push(0),
         }
 
-        self.write_usize(bytes.len());
+        bytes.len().serialize_owned(self);
         self.write_slice(&bytes);
     }
 
@@ -411,7 +353,7 @@ impl TdfSerializer {
     pub fn write_map_header(&mut self, key_type: TdfType, value_type: TdfType, length: usize) {
         self.write_type(key_type);
         self.write_type(value_type);
-        self.write_usize(length);
+        length.serialize_owned(self);
     }
 
     /// Clears the contents of the underlying buffer
