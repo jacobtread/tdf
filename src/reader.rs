@@ -398,14 +398,12 @@ impl<'de> TdfDeserializer<'de> {
     }
 
     /// Skips the next var int value
-    pub fn skip_var_int(&mut self) {
-        while self.cursor < self.buffer.len() {
-            let byte = self.buffer[self.cursor];
-            self.cursor += 1;
-            if byte < 128 {
-                break;
-            }
+    pub fn skip_var_int(&mut self) -> DecodeResult<()> {
+        let mut byte = self.read_byte()?;
+        while byte >= 0x80 {
+            byte = self.read_byte()?;
         }
+        Ok(())
     }
 
     /// Skips the starting 2 value at the beggining of the group
@@ -483,7 +481,7 @@ impl<'de> TdfDeserializer<'de> {
     /// `ty` The type of data to skip
     pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
         match ty {
-            TdfType::VarInt => self.skip_var_int(),
+            TdfType::VarInt => self.skip_var_int()?,
             TdfType::String | TdfType::Blob => self.skip_blob()?,
             TdfType::Group => self.skip_group()?,
             TdfType::List => self.skip_list()?,
@@ -491,13 +489,13 @@ impl<'de> TdfDeserializer<'de> {
             TdfType::TaggedUnion => self.skip_union()?,
             TdfType::VarIntList => self.skip_var_int_list()?,
             TdfType::ObjectType => {
-                self.skip_var_int();
-                self.skip_var_int();
+                self.skip_var_int()?;
+                self.skip_var_int()?;
             }
             TdfType::ObjectId => {
-                self.skip_var_int();
-                self.skip_var_int();
-                self.skip_var_int();
+                self.skip_var_int()?;
+                self.skip_var_int()?;
+                self.skip_var_int()?;
             }
             TdfType::Float => self.skip_f32()?,
             TdfType::U12 => {

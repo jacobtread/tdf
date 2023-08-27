@@ -51,7 +51,7 @@ pub mod var_int {
 
             // Consume remaining unused VarInt data. We only wanted a u8
             if byte >= 0x80 {
-                r.skip_var_int();
+                r.skip_var_int()?;
             }
             Ok(result)
         }
