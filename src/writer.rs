@@ -501,3 +501,22 @@ impl TdfSerializer for Vec<u8> {
         self.extend_from_slice(value);
     }
 }
+
+#[cfg(feature = "bytes")]
+mod bytes {
+    use bytes::{BufMut, BytesMut};
+
+    use super::TdfSerializer;
+
+    impl TdfSerializer for BytesMut {
+        #[inline]
+        fn write_byte(&mut self, value: u8) {
+            self.put_u8(value);
+        }
+
+        #[inline]
+        fn write_slice(&mut self, value: &[u8]) {
+            self.put_slice(value);
+        }
+    }
+}
