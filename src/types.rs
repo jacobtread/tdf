@@ -952,10 +952,10 @@ pub mod tagged_union {
         Unset,
     }
 
-    impl<Value> TaggedUnion<Value> {
-        /// Key used by tagged unions that have no set value
-        pub const UNSET_KEY: u8 = 0x7F;
+    /// Key used by tagged unions that have no set value
+    pub const TAGGED_UNSET_KEY: u8 = 0x7F;
 
+    impl<Value> TaggedUnion<Value> {
         /// Checks if the union is of set type
         pub fn is_set(&self) -> bool {
             matches!(self, Self::Set { .. })
@@ -991,7 +991,7 @@ pub mod tagged_union {
 
     pub fn skip_tagged_union(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let ty = r.read_byte()?;
-        if ty != TaggedUnion::<()>::UNSET_KEY {
+        if ty != TAGGED_UNSET_KEY {
             r.skip()?;
         }
         Ok(())
@@ -1003,7 +1003,7 @@ pub mod tagged_union {
     {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let key = r.read_byte()?;
-            if key == Self::UNSET_KEY {
+            if key == TAGGED_UNSET_KEY {
                 return Ok(TaggedUnion::Unset);
             }
             let tag = Tagged::deserialize_owned(r)?;
@@ -1036,7 +1036,7 @@ pub mod tagged_union {
                     Tagged::serialize_raw(w, &tag.0, Value::TYPE);
                     value.serialize(w);
                 }
-                TaggedUnion::Unset => w.write_byte(Self::UNSET_KEY),
+                TaggedUnion::Unset => w.write_byte(TAGGED_UNSET_KEY),
             }
         }
     }

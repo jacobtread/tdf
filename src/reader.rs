@@ -11,7 +11,7 @@ use crate::types::{
     float::skip_f32,
     list::skip_list,
     map::{deserialize_map_header, skip_map},
-    tagged_union::skip_tagged_union,
+    tagged_union::{skip_tagged_union, TAGGED_UNSET_KEY},
     var_int::skip_var_int,
     Blob, ObjectId, ObjectType, TaggedUnion, VarIntList,
 };
@@ -404,7 +404,7 @@ impl<'de> TdfDeserializer<'de> {
             }
             TdfType::TaggedUnion => {
                 let ty = self.read_byte()?;
-                if ty == TaggedUnion::<()>::UNSET_KEY {
+                if ty == TAGGED_UNSET_KEY {
                     out.push_str("Union(Unset)")
                 } else {
                     let tag = Tagged::deserialize_owned(self)?;

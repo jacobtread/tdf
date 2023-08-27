@@ -61,38 +61,38 @@
 //!
 //! ### Integer Functions
 //!
-//! * [TdfSerializer::tag_zero] (0) - Special function for writing a zero integer value
-//! * [TdfSerializer::tag_bool] ([bool]) - Function for tagging boolean values
-//! * [TdfSerializer::tag_u8] ([u8]) - Function for tagging unsigned 8 bit integers
-//! * [TdfSerializer::tag_u16] ([u16]) - Function for tagging unsigned 16 bit integers
-//! * [TdfSerializer::tag_u32] ([u32]) - Function for tagging unsigned 32 bit integers
-//! * [TdfSerializer::tag_u64] ([u64]) - Function for tagging unsigned 64 bit integers
-//! * [TdfSerializer::tag_usize] ([usize]) - Function for tagging usize integers
+//! * [tag_zero](TdfSerializer::tag_zero) - Special function for writing a zero integer value
+//! * [tag_bool](TdfSerializer::tag_bool) - Function for tagging boolean values
+//! * [tag_u8](TdfSerializer::tag_u8) - Function for tagging unsigned 8 bit integers
+//! * [tag_u16](TdfSerializer::tag_u16) - Function for tagging unsigned 16 bit integers
+//! * [tag_u32](TdfSerializer::tag_u32) - Function for tagging unsigned 32 bit integers
+//! * [tag_u64](TdfSerializer::tag_u64) - Function for tagging unsigned 64 bit integers
+//! * [tag_usize](TdfSerializer::tag_usize) - Function for tagging usize integers
 //!
 //! ### String Functions
 //!
-//! * [TdfSerializer::tag_str_empty] ("") Special function for writing an empty string
-//! * [TdfSerializer::tag_str] ([&str]) Function for tagging a string slice
+//! * [tag_str_empty](TdfSerializer::tag_str_empty) Special function for writing an empty string
+//! * [tag_str](TdfSerializer::tag_str) Function for tagging a string slice
 //!
 //! ### Blob Functions
 //!
-//! * [TdfSerializer::tag_blob_empty] ([Blob]) Special function for tagging an empty blob value
-//! * [TdfSerializer::tag_blob] (&[u8]) Function for tagging blob values directly from a byte slice
+//! * [tag_blob_empty](TdfSerializer::tag_blob_empty) Special function for tagging an empty blob value
+//! * [tag_blob](TdfSerializer::tag_blob) Function for tagging blob values directly from a byte slice
 //!
 //! ### List Functions
 //!
 //! Tagging functions for writing list types
 //!
-//! * [TdfSerializer::tag_list_start] - Special functions for writing a list header (Used to manually write list impl for complex types)
-//! * [TdfSerializer::tag_list_empty] - Special function for writing an empty list
-//! * [TdfSerializer::tag_list_slice] - Special function for writing a list using a slice of serializable elements
-//! * [TdfSerializer::tag_list_slice_ref] - Special function for writing a list using a slice of references to serializable elements
+//! * [tag_list_start](TdfSerializer::tag_list_start) - Special function for writing a list header (Used to manually write list impl for complex types)
+//! * [tag_list_empty](TdfSerializer::tag_list_empty) - Special function for writing an empty list
+//! * [tag_list_slice](TdfSerializer::tag_list_slice) - Special function for writing a list using a slice of serializable elements
+//! * [tag_list_slice_ref](TdfSerializer::tag_list_slice_ref) - Special function for writing a list using a slice of references to serializable elements
 //!
 //! #### List Iterator Functions
 //!
-//! * [TdfSerializer::tag_list_iter] - Special function for writing a list using a iterator
-//! * [TdfSerializer::tag_list_iter_ref] - Special function for writing a list using a iterator of references
-//! * [TdfSerializer::tag_list_iter_owned] - Special function for writing a list using a iterator of owned values (i.e primitives)
+//! * [tag_list_iter](TdfSerializer::tag_list_iter) - Special function for writing a list using a iterator
+//! * [tag_list_iter_ref](TdfSerializer::tag_list_iter_ref) - Special function for writing a list using a iterator of references
+//! * [tag_list_iter_owned](TdfSerializer::tag_list_iter_owned) - Special function for writing a list using a iterator of owned values (i.e primitives)
 //!
 //! > **Note**
 //! > Iterators use by these functions must implement [ExactSizeIterator] otherwise the size cannot be
@@ -102,15 +102,15 @@
 //!
 //! Tagging functions for map types
 //!
-//! * [TdfSerializer::tag_map_start] -
-//! * [TdfSerializer::tag_map_tuples] -
+//! * [tag_map_start](TdfSerializer::tag_map_start) - Special function for writing a map header (Used to manually write list impl for complex types)
+//! * [tag_map_tuples](TdfSerializer::tag_map_tuples) - Special function for writing a map from a slice of key value pairs
 //!
 //! #### Map Iterator Functions
 //!
-//! * [TdfSerializer::tag_map_iter] - Special function for writing a map using a iterator of key value pairs
-//! * [TdfSerializer::tag_map_iter_ref] - Special function for writing a map using a iterator of references to key value pairs
-//! * [TdfSerializer::tag_map_iter_ref_ref] - Special function for writing a map using a iterator of reference to key value reference pairs
-//! * [TdfSerializer::tag_map_iter_owned] - Special function for writing a map using a iterator of owned key value pairs
+//! * [tag_map_iter](TdfSerializer::tag_map_iter) - Special function for writing a map using a iterator of key value pairs
+//! * [tag_map_iter_ref](TdfSerializer::tag_map_iter_ref) - Special function for writing a map using a iterator of references to key value pairs
+//! * [tag_map_iter_ref_ref](TdfSerializer::tag_map_iter_ref_ref) - Special function for writing a map using a iterator of reference to key value reference pairs
+//! * [tag_map_iter_owned](TdfSerializer::tag_map_iter_owned) - Special function for writing a map using a iterator of owned key value pairs
 //!
 //! > **Note**
 //! > Iterators use by these functions must implement [ExactSizeIterator] otherwise the size cannot be
@@ -118,16 +118,28 @@
 //!
 //! ### Var Int Lists
 //!
-//! * [TdfSerializer::tag_var_int_list_empty] - Special function for writing an empty var int list
-//! * [TdfSerializer::tag_var_int_list] - Special function for writing a var int list from a slice
+//! * [tag_var_int_list_empty](TdfSerializer::tag_var_int_list_empty) - Special function for writing an empty var int list
+//! * [tag_var_int_list](TdfSerializer::tag_var_int_list) - Special function for writing a var int list from a slice
+//!
+//! ### Tagged Unions
+//!
+//! * [tag_union_start](TdfSerializer::tag_union_start) - Special function for writing a tagged union header (Used to manually write list impl for complex types)
+//! * [tag_union_value](TdfSerializer::tag_union_value) - Special function for writing a tagged union
+//! * [tag_union_unset](TdfSerializer::tag_union_unset) - Special function for writing a tagged union with an unset value
+//!
+//! ## Extra Functions
+//!
+//! Below are some extra functions for performing operatings on a buffer
+//!
+//! * [clear](TdfSerializer::clear) - Clears the underlying write buffer, use this if you want to re-use the same writer
 //!
 
 use crate::{
     codec::TdfSerializeOwned,
     tag::{RawTag, Tagged},
     types::{
-        list::serialize_list_header, map::serialize_map_header, string::write_empty_str, Blob,
-        TaggedUnion,
+        list::serialize_list_header, map::serialize_map_header, string::write_empty_str,
+        tagged_union::TAGGED_UNSET_KEY, Blob,
     },
 };
 
@@ -468,9 +480,9 @@ impl TdfSerializer {
     }
 
     #[inline]
-    pub fn tag_union_value<C>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &C)
+    pub fn tag_union_value<V>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &V)
     where
-        C: TdfSerialize + TdfTyped,
+        V: TdfSerialize + TdfTyped,
     {
         self.tag_union_start(tag, key);
         self.tag_ref(value_tag, value);
@@ -478,7 +490,7 @@ impl TdfSerializer {
 
     #[inline]
     pub fn tag_union_unset(&mut self, tag: RawTag) {
-        self.tag_union_start(tag, TaggedUnion::<()>::UNSET_KEY);
+        self.tag_union_start(tag, TAGGED_UNSET_KEY);
     }
 
     // Buffer functions
