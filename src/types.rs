@@ -18,6 +18,52 @@ pub mod var_int {
         writer::TdfSerializer,
     };
 
+    /// Macro for implementing variable-length integer serialization
+    /// for a specific integer type
+    ///
+    /// # Arguments
+    /// * value - The value to use for serializing
+    /// * w - The writer to use to write the output
+    macro_rules! impl_serialize_int {
+        ($value:ident, $w:ident) => {{
+            if $value < 0x40 {
+                $w.write_byte($value as u8);
+                return;
+            }
+
+            $w.write_byte((($value & 0x3f) | 0x80) as u8);
+
+            let mut value = $value >> 6;
+            while value >= 0x80 {
+                $w.write_byte(((value & 0x7f) | 0x80) as u8);
+                value >>= 7;
+            }
+
+            $w.write_byte(value as u8)
+        }};
+    }
+
+    /// Macro for implementing variable-length integer deserialization
+    /// for a specific integer type
+    ///
+    /// # Arguments
+    /// * ty - The type that is being deserialized
+    /// * r - The reader to read bytes from
+    macro_rules! impl_deserialize_int {
+        ($ty:ty, $r:ident) => {{
+            let mut byte: u8 = $r.read_byte()?;
+            let mut result: $ty = (byte & 0x3F) as $ty;
+            let mut shift = 6;
+            while byte >= 0x80 {
+                byte = $r.read_byte()?;
+                result |= ((byte & 0x7f) as $ty).wrapping_shl(shift);
+                shift += 7;
+            }
+
+            Ok(result)
+        }};
+    }
+
     impl TdfDeserializeOwned for bool {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             let value = u8::deserialize_owned(r)?;
@@ -39,33 +85,13 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for u8 {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let first: u8 = r.read_byte()?;
-            let mut result: u8 = first & 0x3f;
-            // Values less than 128 are already complete and don't need more reading
-            if first < 0x80 {
-                return Ok(result);
-            }
-
-            let byte: u8 = r.read_byte()?;
-            result |= (byte & 0x7f) << 6;
-
-            // Consume remaining unused VarInt data. We only wanted a u8
-            if byte >= 0x80 {
-                r.skip_var_int()?;
-            }
-            Ok(result)
+            impl_deserialize_int!(u8, r)
         }
     }
 
     impl TdfSerializeOwned for u8 {
         fn serialize_owned(self, w: &mut TdfSerializer) {
-            // Values < 64 are directly appended to buffer
-            if self < 0x40 {
-                w.write_byte(self);
-                return;
-            }
-            w.write_byte((self & 0x3f) | 0x80);
-            w.write_byte(self >> 6);
+            impl_serialize_int!(self, w)
         }
     }
 
@@ -95,16 +121,14 @@ pub mod var_int {
     // VarInt u16
 
     impl TdfDeserializeOwned for u16 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            reader.read_u16()
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            impl_deserialize_int!(u16, r)
         }
     }
 
-    impl TdfSerialize for u16 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u16(*self)
+    impl TdfSerializeOwned for u16 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            impl_serialize_int!(self, w)
         }
     }
 
@@ -133,18 +157,16 @@ pub mod var_int {
     }
 
     impl TdfDeserializeOwned for u32 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            reader.read_u32()
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            impl_deserialize_int!(u32, r)
         }
     }
 
     // VarInt u32
 
-    impl TdfSerialize for u32 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u32(*self)
+    impl TdfSerializeOwned for u32 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            impl_serialize_int!(self, w)
         }
     }
 
@@ -176,35 +198,13 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for u64 {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let mut byte: u8 = r.read_byte()?;
-            let mut result: u64 = (byte & 0x3F) as u64;
-            let mut shift = 6;
-            while byte >= 0x80 {
-                byte = r.read_byte()?;
-                result |= ((byte & 0x7f) as u64).wrapping_shl(shift);
-                shift += 7;
-            }
-
-            Ok(result)
+            impl_deserialize_int!(u64, r)
         }
     }
 
     impl TdfSerializeOwned for u64 {
         fn serialize_owned(self, w: &mut TdfSerializer) {
-            if self < 0x40 {
-                w.write_byte(self as u8);
-                return;
-            }
-
-            w.write_byte(((self & 0x3f) | 0x80) as u8);
-
-            let mut value = self >> 6;
-            while value >= 0x80 {
-                w.write_byte(((value & 0x7f) | 0x80) as u8);
-                value >>= 7;
-            }
-
-            w.write_byte(value as u8)
+            impl_serialize_int!(self, w);
         }
     }
 
@@ -235,16 +235,14 @@ pub mod var_int {
     // VarInt usize
 
     impl TdfDeserializeOwned for usize {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            reader.read_usize()
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            impl_deserialize_int!(usize, r)
         }
     }
 
-    impl TdfSerialize for usize {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_usize(*self)
+    impl TdfSerializeOwned for usize {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            impl_serialize_int!(self, w);
         }
     }
 
