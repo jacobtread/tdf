@@ -11,24 +11,23 @@ pub use var_int_list::VarIntList;
 
 pub mod var_int {
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
 
-    impl TdfSerialize for bool {
-        #[inline]
-        fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_bool(*self)
+    impl TdfDeserializeOwned for bool {
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let value = r.read_u8()?;
+            Ok(value == 1)
         }
     }
 
-    impl TdfDeserializeOwned for bool {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            reader.read_bool()
+    impl TdfSerializeOwned for bool {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            w.write_byte(self as u8)
         }
     }
 
@@ -235,6 +234,9 @@ pub mod var_int {
     impl TdfTyped for isize {
         const TYPE: TdfType = TdfType::VarInt;
     }
+
+    #[cfg(test)]
+    mod test {}
 }
 
 pub mod string {

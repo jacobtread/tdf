@@ -416,13 +416,6 @@ impl TdfSerializer {
         self.write_slice(&bytes);
     }
 
-    /// Writes a boolean value which uses the VarInt encoding
-    /// except because the values are < 64 they are just directly
-    /// appended as bytes
-    pub fn write_bool(&mut self, value: bool) {
-        self.buffer.push(value as u8);
-    }
-
     /// Writes the header for a map in order to begin writing map values
     ///
     /// `key_type`   The type of the map keys

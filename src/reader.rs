@@ -200,12 +200,6 @@ impl<'de> TdfDeserializer<'de> {
         Ok(text)
     }
 
-    /// Reads a boolean value this is encoded using the
-    /// var int encoding
-    pub fn read_bool(&mut self) -> DecodeResult<bool> {
-        Ok(matches!(self.read_u8()?, 1))
-    }
-
     /// Reads a map from the underlying buffer
     pub fn read_map<K, V>(&mut self) -> DecodeResult<TdfMap<K, V>>
     where
