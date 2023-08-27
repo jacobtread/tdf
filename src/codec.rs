@@ -1,7 +1,7 @@
 //! Traits for implementing encoding ([`Encodable`]) and decoding ([`Decodable`])
 //! for different types and [`ValueType`] trait for specifying the Tdf type of a type
 
-use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfWriter};
+use super::{error::DecodeResult, reader::TdfReader, tag::TdfType, writer::TdfSerializer};
 
 pub trait TdfDeserialize<'de>: Sized {
     fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self>;
@@ -22,10 +22,10 @@ where
 }
 
 pub trait TdfSerialize: Sized {
-    fn serialize(&self, w: &mut TdfWriter);
+    fn serialize(&self, w: &mut TdfSerializer);
 
     fn serialize_bytes(&self) -> Vec<u8> {
-        let mut output = TdfWriter::default();
+        let mut output = TdfSerializer::default();
         self.serialize(&mut output);
         output.into()
     }

@@ -11,7 +11,7 @@ use super::{
 /// this writer implementation provides functions for writing certain
 /// data types in their Blaze format
 #[derive(Default)]
-pub struct TdfWriter {
+pub struct TdfSerializer {
     /// The buffer that will be written to
     pub buffer: Vec<u8>,
 }
@@ -36,7 +36,7 @@ macro_rules! impl_encode_var {
     };
 }
 
-impl TdfWriter {
+impl TdfSerializer {
     /// Writes a single byte to the underlying buffer. This just
     /// appends the byte to the buffer.
     ///
@@ -452,15 +452,15 @@ impl TdfWriter {
 }
 
 /// Implementation for converting tdf writer into its underlying buffer with from
-impl From<TdfWriter> for Vec<u8> {
-    fn from(value: TdfWriter) -> Self {
+impl From<TdfSerializer> for Vec<u8> {
+    fn from(value: TdfSerializer) -> Self {
         value.buffer
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::TdfWriter;
+    use super::TdfSerializer;
     use crate::{codec::TdfSerialize, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
 
     /// Test for ensuring some common tags of different
@@ -480,7 +480,7 @@ mod test {
             (b"IP", &[167, 0, 0]),
             (b"A", &[132, 0, 0]),
         ];
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for (tag, expected) in TAGS {
             writer.tag(tag, TdfType::VarInt);
             assert_eq!(
@@ -506,7 +506,7 @@ mod test {
     /// Writes 0 - 255 and checks each value matches
     #[test]
     fn test_write_byte() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for i in 0..255 {
             writer.write_byte(i);
             assert_eq!(writer.buffer.len(), 1);
@@ -520,7 +520,7 @@ mod test {
     #[test]
     fn test_write_slice() {
         const SLICE: &[u8] = &[0, 125, 21, 1, 3, 15, 50, 30];
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.write_slice(SLICE);
         assert_eq!(&writer.buffer, SLICE)
     }
@@ -541,7 +541,7 @@ mod test {
             TdfType::ObjectId,
             TdfType::Float,
         ];
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for ty in TYPES {
             writer.write_type(ty);
             assert_eq!(writer.buffer.len(), 1);
@@ -555,7 +555,7 @@ mod test {
     fn test_tag_bool() {
         // Possible boolean values and their expected u8 value
         const VALUES: [(bool, u8); 2] = [(true, 1), (false, 0)];
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for (value, expected) in VALUES {
             writer.tag_bool(b"TEST", value);
             assert_eq!(writer.buffer.len(), 5);
@@ -568,7 +568,7 @@ mod test {
     /// Tests tagging a zero value
     #[test]
     fn test_tag_zero() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_zero(b"TEST");
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::VarInt as u8);
@@ -580,7 +580,7 @@ mod test {
     ///
     #[test]
     fn test_tag_u8() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in u8::MIN..u8::MAX {
             writer.tag_u8(b"TEST", value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -595,7 +595,7 @@ mod test {
     ///
     #[test]
     fn test_tag_u16() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in u16::MIN..u16::MAX {
             writer.tag_u16(b"TEST", value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -610,7 +610,7 @@ mod test {
     /// (Takes the last 65535 numbers)
     #[test]
     fn test_tag_u32() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in (u32::MAX - 65535)..u32::MAX {
             writer.tag_u32(b"TEST", value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -625,7 +625,7 @@ mod test {
     /// (Takes the last 65535 numbers)
     #[test]
     fn test_tag_u64() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in (u64::MAX - 65535)..u64::MAX {
             writer.tag_u64(b"TEST", value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -640,7 +640,7 @@ mod test {
     /// (Takes the last 65535 numbers)
     #[test]
     fn test_tag_usize() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in (usize::MAX - 65535)..usize::MAX {
             writer.tag_usize(b"TEST", value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -655,7 +655,7 @@ mod test {
     /// Tests tagging an empty string
     #[test]
     fn test_tag_str_empty() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_str_empty(b"TEST");
         assert_eq!(writer.buffer.len(), 6);
         assert_eq!(writer.buffer[3], TdfType::String as u8);
@@ -665,7 +665,7 @@ mod test {
     /// Tests tagging an empty blob
     #[test]
     fn test_tag_empty_blob() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_empty_blob(b"TEST");
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::Blob as u8);
@@ -678,7 +678,7 @@ mod test {
         const TEXT: &str = "Test string";
         const TEXT_BYTES: &[u8] = b"Test string\0";
 
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_str(b"TEST", TEXT);
 
         // 3) tag 1) type 1) length TEXT.len()) bytes 1) terminator
@@ -699,7 +699,7 @@ mod test {
     /// Tests tagging a group
     #[test]
     fn test_tag_group() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_group(b"TEST");
         writer.tag_group_end();
 
@@ -711,7 +711,7 @@ mod test {
     /// Tests tagging a group with the closure way
     #[test]
     fn test_tag_group_alt() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
 
         writer.group(b"TEST", |_| {});
 
@@ -723,7 +723,7 @@ mod test {
     /// Tests tagging a union
     #[test]
     fn test_tag_union() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_union_start(b"TEST", 15);
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::Union as u8);
@@ -747,7 +747,7 @@ mod test {
     /// Tests tagging for value types
     #[test]
     fn test_tag_value() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_value(b"TEST", &12u8);
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::VarInt as u8);
@@ -757,7 +757,7 @@ mod test {
     /// Tests writing an empty list
     #[test]
     fn test_tag_list_empty() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_list_empty(b"TEST", TdfType::VarInt);
         assert_eq!(writer.buffer.len(), 6);
         assert_eq!(writer.buffer[3], TdfType::List as u8);
@@ -768,7 +768,7 @@ mod test {
     /// Tests writing an empty list of varints
     #[test]
     fn test_tag_var_int_list_empty() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_var_int_list_empty(b"TEST");
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::VarIntList as u8);
@@ -778,7 +778,7 @@ mod test {
     /// Tests writing a map tag and details
     #[test]
     fn test_tag_map_start() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_map_start(b"TEST", TdfType::String, TdfType::VarInt, 0);
         assert_eq!(writer.buffer.len(), 7);
         assert_eq!(writer.buffer[3], TdfType::Map as u8);
@@ -790,7 +790,7 @@ mod test {
     /// Tests writing a pair
     #[test]
     fn test_tag_object_type() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_object_type(b"TEST", 5, 10);
         assert_eq!(writer.buffer.len(), 6);
         assert_eq!(writer.buffer[3], TdfType::ObjectType as u8);
@@ -801,7 +801,7 @@ mod test {
     /// Tests writing a triple
     #[test]
     fn test_tag_object_id() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.tag_object_id(b"TEST", 5, 10, 50);
         assert_eq!(writer.buffer.len(), 7);
         assert_eq!(writer.buffer[3], TdfType::ObjectId as u8);
@@ -813,7 +813,7 @@ mod test {
     /// Tests writing an empty string
     #[test]
     fn test_write_empty_str() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.write_empty_str();
         assert_eq!(&writer.buffer, &[1, 0]);
     }
@@ -821,7 +821,7 @@ mod test {
     /// Tests writing float values
     #[test]
     fn test_write_f32() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         let mut value: f32 = 1.0;
         while value < f32::MAX {
             let expected = value.to_be_bytes();
@@ -835,7 +835,7 @@ mod test {
     /// Tests writing all the different u8 values
     #[test]
     fn test_write_u8() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in u8::MIN..u8::MAX {
             writer.write_u8(value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -850,7 +850,7 @@ mod test {
     ///
     #[test]
     fn test_write_u16() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in u16::MIN..u16::MAX {
             writer.write_u16(value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -865,7 +865,7 @@ mod test {
     /// (Takes the last 65535 numbers)
     #[test]
     fn test_write_u32() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in (u32::MAX - 65535)..u32::MAX {
             writer.write_u32(value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -880,7 +880,7 @@ mod test {
     /// (Takes the last 65535 numbers)
     #[test]
     fn test_write_u64() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in (u64::MAX - 65535)..u64::MAX {
             writer.write_u64(value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -895,7 +895,7 @@ mod test {
     /// (Takes the last 65535 numbers)
     #[test]
     fn test_write_usize() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for value in (usize::MAX - 65535)..usize::MAX {
             writer.write_usize(value);
             let mut reader = TdfReader::new(&writer.buffer);
@@ -912,7 +912,7 @@ mod test {
     fn test_write_bool() {
         // Possible boolean values and their expected u8 value
         const VALUES: [(bool, u8); 2] = [(true, 1), (false, 0)];
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         for (value, expected) in VALUES {
             writer.write_bool(value);
             assert_eq!(writer.buffer.len(), 1);
@@ -927,7 +927,7 @@ mod test {
         const TEXT: &str = "Test string";
         const TEXT_BYTES: &[u8] = b"Test string\0";
 
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.write_str(TEXT);
 
         // 3) tag 1) type 1) length TEXT.len()) bytes 1) terminator
@@ -947,7 +947,7 @@ mod test {
     /// Tests clearing the buffer
     #[test]
     fn test_clear() {
-        let mut writer = TdfWriter::default();
+        let mut writer = TdfSerializer::default();
         writer.write_empty_str();
         writer.write_empty_str();
         writer.write_empty_str();

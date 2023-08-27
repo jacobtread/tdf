@@ -8,177 +8,174 @@ use super::{
     error::{DecodeError, DecodeResult},
     reader::TdfReader,
     tag::{Tag, TdfType},
-    writer::TdfWriter,
+    writer::TdfSerializer,
 };
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{slice, vec};
 
-/// List of Var ints
-#[derive(Debug, PartialEq, Eq, Default)]
-pub struct VarIntList(pub Vec<u64>);
+pub mod var_int_list {
+    use crate::{
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
 
-impl VarIntList {
-    /// Creates a new VarIntList
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
+    /// Wrapper type for a list of variable-length integers.
+    /// Represented using a Vec of u64 values
+    #[derive(Debug, PartialEq, Eq, Default, Clone)]
+    pub struct VarIntList(pub Vec<u64>);
 
-    /// Creates a new VarIntList with no capacity
-    pub fn empty() -> Self {
-        Self(Vec::with_capacity(0))
-    }
-
-    /// Creates a new VarIntList with the provided
-    /// capacity
-    ///
-    /// `capacity` The capacity for the underlying list
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self(Vec::with_capacity(capacity))
-    }
-
-    pub fn into_inner(self) -> Vec<u64> {
-        self.0
-    }
-}
-
-impl AsRef<[u64]> for VarIntList {
-    fn as_ref(&self) -> &[u64] {
-        self.0.as_ref()
-    }
-}
-
-impl TdfSerialize for VarIntList {
-    fn serialize(&self, output: &mut TdfWriter) {
-        output.write_usize(self.0.len());
-        self.0
-            .iter()
-            .copied()
-            .for_each(|value| output.write_u64(value));
-    }
-}
-
-impl TdfDeserializeOwned for VarIntList {
-    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let length = reader.read_usize()?;
-        let mut out = Vec::with_capacity(length);
-        for _ in 0..length {
-            out.push(reader.read_u64()?);
+    impl VarIntList {
+        /// Creates a new VarIntList
+        pub fn new() -> Self {
+            Self(Vec::default())
         }
-        Ok(VarIntList(out))
-    }
-}
 
-impl TdfTyped for VarIntList {
-    const TYPE: TdfType = TdfType::VarIntList;
-}
-
-/// Type that can be unset or contain a pair of key
-/// values
-#[derive(Debug, PartialEq, Eq)]
-pub enum Union<C> {
-    /// Set variant of a union value
-    Set { key: u8, tag: Tag, value: C },
-    /// Unset variant of a union value
-    Unset,
-}
-
-impl<C> Union<C> {
-    /// Creates a new union with a unset value
-    pub fn unset() -> Self {
-        Self::Unset
-    }
-
-    /// Creates a new set union value with the provided
-    /// key tag and value
-    pub fn set(key: u8, tag: &[u8], value: C) -> Self {
-        Self::Set {
-            key,
-            tag: tag.into(),
-            value,
+        /// Consumes self returning the underlying
+        /// Vec storing the variable-length integer values
+        pub fn into_inner(self) -> Vec<u64> {
+            self.0
         }
     }
 
-    /// Checks if the union is of set type
-    pub fn is_set(&self) -> bool {
-        matches!(self, Self::Set { .. })
-    }
-
-    /// Checks if the union is of unset type
-    pub fn is_unset(&self) -> bool {
-        matches!(self, Self::Unset)
-    }
-
-    /// Unwraps the underlying value stored in this union panicing if the
-    /// value is unset
-    pub fn unwrap(self) -> C {
-        match self {
-            Self::Unset => panic!("Attempted to unwrap union with no value"),
-            Self::Set { value, .. } => value,
+    impl From<Vec<u64>> for VarIntList {
+        fn from(value: Vec<u64>) -> Self {
+            Self(value)
         }
     }
-}
 
-impl<C> From<Union<C>> for Option<C> {
-    fn from(value: Union<C>) -> Self {
-        match value {
-            Union::Set { value, .. } => Some(value),
-            Union::Unset => None,
+    impl AsRef<[u64]> for VarIntList {
+        fn as_ref(&self) -> &[u64] {
+            self.0.as_ref()
         }
     }
-}
 
-impl<C> TdfTyped for Union<C> {
-    const TYPE: TdfType = TdfType::Union;
-}
+    impl TdfSerialize for VarIntList {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_usize(self.0.len());
+            self.0.iter().copied().for_each(|value| w.write_u64(value));
+        }
+    }
 
-impl<C> TdfSerialize for Union<C>
-where
-    C: TdfSerialize + TdfTyped,
-{
-    fn serialize(&self, output: &mut TdfWriter) {
-        match self {
-            Union::Set { key, tag, value } => {
-                output.write_byte(*key);
-                output.tag(&tag.0, C::TYPE);
-                value.serialize(output);
+    impl TdfDeserializeOwned for VarIntList {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            let length = reader.read_usize()?;
+            let mut out = Vec::with_capacity(length);
+            for _ in 0..length {
+                out.push(reader.read_u64()?);
             }
-            Union::Unset => output.write_byte(UNION_UNSET),
+            Ok(VarIntList(out))
         }
+    }
+
+    impl TdfTyped for VarIntList {
+        const TYPE: TdfType = TdfType::VarIntList;
     }
 }
 
-impl<'de, C> TdfDeserialize<'de> for Union<C>
-where
-    C: TdfDeserialize<'de> + TdfTyped,
-{
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let key = reader.read_byte()?;
-        if key == UNION_UNSET {
-            return Ok(Union::Unset);
-        }
-        let tag = reader.read_tag()?;
-        let expected_type = C::TYPE;
-        let actual_type = tag.ty;
-        if actual_type != expected_type {
-            return Err(DecodeError::InvalidType {
-                expected: expected_type,
-                actual: actual_type,
-            });
-        }
-        let value = C::deserialize(reader)?;
+mod tagged_union {
+    use crate::{
+        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::{DecodeError, DecodeResult},
+        reader::TdfReader,
+        tag::{Tag, TdfType},
+        writer::TdfSerializer,
+    };
 
-        Ok(Union::Set {
-            key,
-            tag: tag.tag,
-            value,
-        })
+    /// Representation of a tagged union
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum TaggedUnion<Value> {
+        /// Set variant of a union value
+        Set { key: u8, tag: Tag, value: Value },
+        /// Unset variant of a union value
+        Unset,
+    }
+
+    impl<Value> TaggedUnion<Value> {
+        /// Key used by tagged unions that have no set value
+        pub const UNSET_KEY: u8 = 0x7F;
+
+        /// Checks if the union is of set type
+        pub fn is_set(&self) -> bool {
+            matches!(self, Self::Set { .. })
+        }
+
+        /// Checks if the union is of unset type
+        pub fn is_unset(&self) -> bool {
+            matches!(self, Self::Unset)
+        }
+
+        /// Unwraps the underlying value stored in this tagged
+        /// union. Will panic if the tagged union is unset
+        pub fn unwrap(self) -> Value {
+            match self {
+                Self::Unset => panic!("Attempted to unwrap unset union"),
+                Self::Set { value, .. } => value,
+            }
+        }
+    }
+
+    impl<Value> From<TaggedUnion<Value>> for Option<Value> {
+        fn from(value: TaggedUnion<Value>) -> Self {
+            match value {
+                TaggedUnion::Set { value, .. } => Some(value),
+                TaggedUnion::Unset => None,
+            }
+        }
+    }
+
+    impl<Value> TdfTyped for TaggedUnion<Value> {
+        const TYPE: TdfType = TdfType::Union;
+    }
+
+    impl<Value> TdfSerialize for TaggedUnion<Value>
+    where
+        Value: TdfSerialize + TdfTyped,
+    {
+        fn serialize(&self, output: &mut TdfSerializer) {
+            match self {
+                TaggedUnion::Set { key, tag, value } => {
+                    output.write_byte(*key);
+                    output.tag(&tag.0, Value::TYPE);
+                    value.serialize(output);
+                }
+                TaggedUnion::Unset => output.write_byte(Self::UNSET_KEY),
+            }
+        }
+    }
+
+    impl<'de, Value> TdfDeserialize<'de> for TaggedUnion<Value>
+    where
+        Value: TdfDeserialize<'de> + TdfTyped,
+    {
+        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            let key = reader.read_byte()?;
+            if key == Self::UNSET_KEY {
+                return Ok(TaggedUnion::Unset);
+            }
+            let tag = reader.read_tag()?;
+            let expected_type = Value::TYPE;
+            let actual_type = tag.ty;
+            if actual_type != expected_type {
+                return Err(DecodeError::InvalidType {
+                    expected: expected_type,
+                    actual: actual_type,
+                });
+            }
+            let value = Value::deserialize(reader)?;
+
+            Ok(TaggedUnion::Set {
+                key,
+                tag: tag.tag,
+                value,
+            })
+        }
     }
 }
-
-/// Key value for unions that are unset
-pub const UNION_UNSET: u8 = 0x7F;
 
 #[derive(Clone)]
 pub struct TdfMap<K, V> {
@@ -209,7 +206,7 @@ where
     V: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_map().entries(self.iter())
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
@@ -472,7 +469,7 @@ where
     K: TdfSerialize + TdfTyped,
     V: TdfSerialize + TdfTyped,
 {
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_map_header(K::TYPE, V::TYPE, self.len());
 
         for MapEntry { key, value } in &self.entries {
@@ -513,7 +510,7 @@ impl<K, V> From<HashMap<K, V>> for TdfMap<K, V> {
 
 impl TdfSerialize for f32 {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_f32(*self)
     }
 }
@@ -531,7 +528,7 @@ impl TdfTyped for f32 {
 
 impl TdfSerialize for bool {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_bool(*self)
     }
 }
@@ -580,7 +577,7 @@ macro_rules! forward_codec {
 
 impl TdfSerialize for u8 {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_u8(*self)
     }
 }
@@ -594,7 +591,7 @@ impl TdfDeserializeOwned for u8 {
 
 impl TdfSerialize for u16 {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_u16(*self)
     }
 }
@@ -608,7 +605,7 @@ impl TdfDeserializeOwned for u16 {
 
 impl TdfSerialize for u32 {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_u32(*self)
     }
 }
@@ -622,7 +619,7 @@ impl TdfDeserializeOwned for u32 {
 
 impl TdfSerialize for u64 {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_u64(*self)
     }
 }
@@ -636,7 +633,7 @@ impl TdfDeserializeOwned for u64 {
 
 impl TdfSerialize for usize {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_usize(*self)
     }
 }
@@ -672,7 +669,7 @@ forward_codec!(isize, usize);
 
 impl TdfSerialize for &str {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_str(self)
     }
 }
@@ -683,7 +680,7 @@ impl TdfTyped for &str {
 
 impl TdfSerialize for String {
     #[inline]
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_str(self);
     }
 }
@@ -706,7 +703,7 @@ impl TdfTyped for String {
 pub struct Blob<'de>(pub &'de [u8]);
 
 impl TdfSerialize for Blob<'_> {
-    fn serialize(&self, output: &mut TdfWriter) {
+    fn serialize(&self, output: &mut TdfSerializer) {
         output.write_usize(self.0.len());
         output.write_slice(&self.0);
     }
@@ -730,7 +727,7 @@ impl<C> TdfSerialize for Vec<C>
 where
     C: TdfSerialize + TdfTyped,
 {
-    fn serialize(&self, writer: &mut TdfWriter) {
+    fn serialize(&self, writer: &mut TdfSerializer) {
         writer.write_type(C::TYPE);
         writer.write_usize(self.len());
         for value in self {
@@ -744,7 +741,7 @@ impl<C> TdfSerialize for &[C]
 where
     C: TdfSerialize + TdfTyped,
 {
-    fn serialize(&self, writer: &mut TdfWriter) {
+    fn serialize(&self, writer: &mut TdfSerializer) {
         writer.write_type(C::TYPE);
         writer.write_usize(self.len());
         for value in self.iter() {
@@ -796,7 +793,7 @@ pub struct ObjectType {
 }
 
 impl TdfSerialize for ObjectType {
-    fn serialize(&self, w: &mut TdfWriter) {
+    fn serialize(&self, w: &mut TdfSerializer) {
         w.write_u16(self.component);
         w.write_u16(self.ty);
     }
@@ -823,7 +820,7 @@ pub struct ObjectId {
 }
 
 impl TdfSerialize for ObjectId {
-    fn serialize(&self, w: &mut TdfWriter) {
+    fn serialize(&self, w: &mut TdfSerializer) {
         self.ty.serialize(w);
         w.write_u64(self.id);
     }
