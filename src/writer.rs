@@ -94,8 +94,28 @@
 //! * [TdfSerializer::tag_list_iter_ref] - Special function for writing a list using a iterator of references
 //! * [TdfSerializer::tag_list_iter_owned] - Special function for writing a list using a iterator of owned values (i.e primitives)
 //!
+//! > **Note**
 //! > Iterators use by these functions must implement [ExactSizeIterator] otherwise the size cannot be
 //! > written for the list header
+//!
+//! #### Map Functions
+//!
+//! Tagging functions for map types
+//!
+//! * [TdfSerializer::tag_map_start] -
+//! * [TdfSerializer::tag_map_tuples] -
+//!
+//! ##### Map Iterator Functions
+//!
+//! * [TdfSerializer::tag_map_iter] - Special function for writing a map using a iterator of key value pairs
+//! * [TdfSerializer::tag_map_iter_ref] - Special function for writing a map using a iterator of references to key value pairs
+//! * [TdfSerializer::tag_map_iter_ref_ref] - Special function for writing a map using a iterator of reference to key value reference pairs
+//! * [TdfSerializer::tag_map_iter_owned] - Special function for writing a map using a iterator of owned key value pairs
+//!
+//! > **Note**
+//! > Iterators use by these functions must implement [ExactSizeIterator] otherwise the size cannot be
+//! > written for the map header
+//!
 use crate::{
     codec::TdfSerializeOwned,
     tag::{RawTag, Tagged},
@@ -319,10 +339,10 @@ impl TdfSerializer {
     }
 
     #[inline]
-    pub fn tag_list_iter<'i, I, V>(&mut self, tag: RawTag, iter: I)
+    pub fn tag_list_iter<I, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = V> + ExactSizeIterator,
-        V: TdfSerialize + TdfTyped + 'i,
+        V: TdfSerialize + TdfTyped,
     {
         self.tag_list_start(tag, V::TYPE, iter.len());
         iter.for_each(|value| value.serialize(self));
@@ -364,16 +384,65 @@ impl TdfSerializer {
         serialize_map_header(self, key, value, length);
     }
 
+    #[inline]
     pub fn tag_map_tuples<K, V>(&mut self, tag: RawTag, values: &[(K, V)])
     where
         K: TdfSerialize + TdfTyped,
         V: TdfSerialize + TdfTyped,
     {
-        self.tag_map_start(tag, K::TYPE, V::TYPE, values.len());
-        for (key, value) in values {
+        self.tag_map_iter_ref(tag, values.iter())
+    }
+
+    pub fn tag_map_iter<I, K, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = (K, V)> + ExactSizeIterator,
+        K: TdfSerialize + TdfTyped,
+        V: TdfSerialize + TdfTyped,
+    {
+        self.tag_map_start(tag, K::TYPE, V::TYPE, iter.len());
+        iter.for_each(|(key, value)| {
             key.serialize(self);
             value.serialize(self);
-        }
+        });
+    }
+
+    pub fn tag_map_iter_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = &'i (K, V)> + ExactSizeIterator,
+        K: TdfSerialize + TdfTyped + 'i,
+        V: TdfSerialize + TdfTyped + 'i,
+    {
+        self.tag_map_start(tag, K::TYPE, V::TYPE, iter.len());
+        iter.for_each(|(key, value)| {
+            key.serialize(self);
+            value.serialize(self);
+        });
+    }
+
+    pub fn tag_map_iter_ref_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = &'i (&'i K, &'i V)> + ExactSizeIterator,
+        K: TdfSerialize + TdfTyped + 'i,
+        V: TdfSerialize + TdfTyped + 'i,
+    {
+        self.tag_map_start(tag, K::TYPE, V::TYPE, iter.len());
+        iter.for_each(|(key, value)| {
+            key.serialize(self);
+            value.serialize(self);
+        });
+    }
+
+    pub fn tag_map_iter_owned<I, K, V>(&mut self, tag: RawTag, iter: I)
+    where
+        I: Iterator<Item = (K, V)> + ExactSizeIterator,
+        K: TdfSerializeOwned + TdfTyped,
+        V: TdfSerializeOwned + TdfTyped,
+    {
+        self.tag_map_start(tag, K::TYPE, V::TYPE, iter.len());
+        iter.for_each(|(key, value)| {
+            key.serialize_owned(self);
+            value.serialize_owned(self);
+        });
     }
 
     // Union tagging
