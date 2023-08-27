@@ -9,7 +9,7 @@ pub use tagged_union::TaggedUnion;
 pub use u12::U12;
 pub use var_int_list::VarIntList;
 
-pub mod var_int_list {
+pub mod var_int {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
@@ -18,156 +18,374 @@ pub mod var_int_list {
         writer::TdfSerializer,
     };
 
-    /// Wrapper type for a list of variable-length integers.
-    /// Represented using a Vec of u64 values
-    #[derive(Debug, PartialEq, Eq, Default, Clone)]
-    pub struct VarIntList(pub Vec<u64>);
-
-    impl VarIntList {
-        /// Creates a new VarIntList
-        pub fn new() -> Self {
-            Self(Vec::default())
+    impl TdfSerialize for bool {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_bool(*self)
         }
+    }
 
-        /// Consumes self returning the underlying
-        /// Vec storing the variable-length integer values
-        pub fn into_inner(self) -> Vec<u64> {
+    impl TdfDeserializeOwned for bool {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_bool()
+        }
+    }
+
+    impl TdfTyped for bool {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt u8
+
+    impl TdfDeserializeOwned for u8 {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_u8()
+        }
+    }
+
+    impl TdfSerialize for u8 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u8(*self)
+        }
+    }
+
+    impl TdfTyped for u8 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt i8
+
+    impl TdfDeserializeOwned for i8 {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            let value = reader.read_u8()?;
+            Ok(value as i8)
+        }
+    }
+
+    impl TdfSerialize for i8 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u8(*self as u8)
+        }
+    }
+
+    impl TdfTyped for i8 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt u16
+
+    impl TdfDeserializeOwned for u16 {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_u16()
+        }
+    }
+
+    impl TdfSerialize for u16 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u16(*self)
+        }
+    }
+
+    impl TdfTyped for u16 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    impl TdfDeserializeOwned for i16 {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            let value = reader.read_u16()?;
+            Ok(value as i16)
+        }
+    }
+
+    // VarInt i16
+
+    impl TdfSerialize for i16 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u16(*self as u16)
+        }
+    }
+
+    impl TdfTyped for i16 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    impl TdfDeserializeOwned for u32 {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_u32()
+        }
+    }
+
+    // VarInt u32
+
+    impl TdfSerialize for u32 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u32(*self)
+        }
+    }
+
+    impl TdfTyped for u32 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt i32
+
+    impl TdfDeserializeOwned for i32 {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            let value = reader.read_u32()?;
+            Ok(value as i32)
+        }
+    }
+
+    impl TdfSerialize for i32 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u32(*self as u32)
+        }
+    }
+
+    impl TdfTyped for i32 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt u64
+
+    impl TdfDeserializeOwned for u64 {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_u64()
+        }
+    }
+
+    impl TdfSerialize for u64 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u64(*self)
+        }
+    }
+
+    impl TdfTyped for u64 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt i64
+
+    impl TdfDeserializeOwned for i64 {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            let value = reader.read_u64()?;
+            Ok(value as i64)
+        }
+    }
+
+    impl TdfSerialize for i64 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_u64(*self as u64)
+        }
+    }
+
+    impl TdfTyped for i64 {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    // VarInt usize
+
+    impl TdfDeserializeOwned for usize {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_usize()
+        }
+    }
+
+    impl TdfSerialize for usize {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_usize(*self)
+        }
+    }
+
+    impl TdfTyped for usize {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+
+    impl TdfDeserializeOwned for isize {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            let value = reader.read_usize()?;
+            Ok(value as isize)
+        }
+    }
+
+    // VarInt isize
+
+    impl TdfSerialize for isize {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_usize(*self as usize)
+        }
+    }
+
+    impl TdfTyped for isize {
+        const TYPE: TdfType = TdfType::VarInt;
+    }
+}
+
+pub mod string {
+    use crate::{
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
+
+    // str slice types
+
+    impl<'de> TdfDeserialize<'de> for &'de str {
+        #[inline]
+        fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            r.read_str()
+        }
+    }
+
+    impl TdfSerialize for &str {
+        #[inline]
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_str(self)
+        }
+    }
+
+    impl TdfTyped for &str {
+        const TYPE: TdfType = TdfType::String;
+    }
+
+    // Owned String types
+
+    impl TdfDeserializeOwned for String {
+        #[inline]
+        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+            r.read_string()
+        }
+    }
+
+    impl TdfSerialize for String {
+        #[inline]
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_str(self);
+        }
+    }
+
+    impl TdfTyped for String {
+        const TYPE: TdfType = TdfType::String;
+    }
+}
+
+pub mod blob {
+    use crate::{
+        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
+
+    /// [Blob] is a structure representing a variable length chunk
+    /// of bytes with the length deliminated by a variable-length integer
+    /// followed by the chunk of bytes
+    ///
+    /// The [String] structure uses the same underlying logic but wraps
+    /// extra utf8 parsing on top
+    #[derive(Default, Debug, Clone, PartialEq, Eq)]
+    pub struct Blob<'de>(pub &'de [u8]);
+
+    impl AsRef<[u8]> for Blob<'_> {
+        fn as_ref(&self) -> &[u8] {
             self.0
         }
     }
 
-    impl From<Vec<u64>> for VarIntList {
-        fn from(value: Vec<u64>) -> Self {
-            Self(value)
+    impl<'de> TdfDeserialize<'de> for Blob<'de> {
+        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            let bytes = reader.read_blob()?;
+            Ok(Blob(bytes))
         }
     }
 
-    impl AsRef<[u64]> for VarIntList {
-        fn as_ref(&self) -> &[u64] {
-            self.0.as_ref()
+    impl TdfSerialize for Blob<'_> {
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_usize(self.0.len());
+            output.write_slice(self.0);
         }
     }
 
-    impl TdfSerialize for VarIntList {
-        fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_usize(self.0.len());
-            self.0.iter().copied().for_each(|value| w.write_u64(value));
-        }
-    }
-
-    impl TdfDeserializeOwned for VarIntList {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            let length = reader.read_usize()?;
-            let mut out = Vec::with_capacity(length);
-            for _ in 0..length {
-                out.push(reader.read_u64()?);
-            }
-            Ok(VarIntList(out))
-        }
-    }
-
-    impl TdfTyped for VarIntList {
-        const TYPE: TdfType = TdfType::VarIntList;
+    impl TdfTyped for Blob<'_> {
+        const TYPE: TdfType = TdfType::Blob;
     }
 }
 
-pub mod tagged_union {
+pub mod list {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
-        error::{DecodeError, DecodeResult},
+        error::DecodeResult,
         reader::TdfReader,
-        tag::{Tag, TdfType},
+        tag::TdfType,
         writer::TdfSerializer,
     };
 
-    /// Representation of a tagged union
-    #[derive(Debug, PartialEq, Eq)]
-    pub enum TaggedUnion<Value> {
-        /// Set variant of a union value
-        Set { key: u8, tag: Tag, value: Value },
-        /// Unset variant of a union value
-        Unset,
-    }
-
-    impl<Value> TaggedUnion<Value> {
-        /// Key used by tagged unions that have no set value
-        pub const UNSET_KEY: u8 = 0x7F;
-
-        /// Checks if the union is of set type
-        pub fn is_set(&self) -> bool {
-            matches!(self, Self::Set { .. })
-        }
-
-        /// Checks if the union is of unset type
-        pub fn is_unset(&self) -> bool {
-            matches!(self, Self::Unset)
-        }
-
-        /// Unwraps the underlying value stored in this tagged
-        /// union. Will panic if the tagged union is unset
-        pub fn unwrap(self) -> Value {
-            match self {
-                Self::Unset => panic!("Attempted to unwrap unset union"),
-                Self::Set { value, .. } => value,
-            }
-        }
-    }
-
-    impl<Value> From<TaggedUnion<Value>> for Option<Value> {
-        fn from(value: TaggedUnion<Value>) -> Self {
-            match value {
-                TaggedUnion::Set { value, .. } => Some(value),
-                TaggedUnion::Unset => None,
-            }
-        }
-    }
-
-    impl<Value> TdfTyped for TaggedUnion<Value> {
-        const TYPE: TdfType = TdfType::Union;
-    }
-
-    impl<Value> TdfSerialize for TaggedUnion<Value>
+    impl<'de, C> TdfDeserialize<'de> for Vec<C>
     where
-        Value: TdfSerialize + TdfTyped,
-    {
-        fn serialize(&self, output: &mut TdfSerializer) {
-            match self {
-                TaggedUnion::Set { key, tag, value } => {
-                    output.write_byte(*key);
-                    output.tag(&tag.0, Value::TYPE);
-                    value.serialize(output);
-                }
-                TaggedUnion::Unset => output.write_byte(Self::UNSET_KEY),
-            }
-        }
-    }
-
-    impl<'de, Value> TdfDeserialize<'de> for TaggedUnion<Value>
-    where
-        Value: TdfDeserialize<'de> + TdfTyped,
+        C: TdfDeserialize<'de> + TdfTyped,
     {
         fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
-            let key = reader.read_byte()?;
-            if key == Self::UNSET_KEY {
-                return Ok(TaggedUnion::Unset);
-            }
-            let tag = reader.read_tag()?;
-            let expected_type = Value::TYPE;
-            let actual_type = tag.ty;
-            if actual_type != expected_type {
-                return Err(DecodeError::InvalidType {
-                    expected: expected_type,
-                    actual: actual_type,
-                });
-            }
-            let value = Value::deserialize(reader)?;
+            reader.expect_type(C::TYPE)?;
 
-            Ok(TaggedUnion::Set {
-                key,
-                tag: tag.tag,
-                value,
-            })
+            let length = reader.read_usize()?;
+            let mut values = Vec::with_capacity(length);
+
+            for _ in 0..length {
+                values.push(C::deserialize(reader)?);
+            }
+            Ok(values)
         }
+    }
+
+    impl<V> TdfSerialize for Vec<V>
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        #[inline]
+        fn serialize(&self, w: &mut TdfSerializer) {
+            self.as_slice().serialize(w)
+        }
+    }
+
+    impl<V> TdfTyped for Vec<V> {
+        const TYPE: TdfType = TdfType::List;
+    }
+
+    impl<V> TdfSerialize for &[V]
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_type(V::TYPE);
+            w.write_usize(self.len());
+            self.iter().for_each(|value| value.serialize(w));
+        }
+    }
+
+    impl<C> TdfTyped for &[C]
+    where
+        C: TdfSerialize + TdfTyped,
+    {
+        const TYPE: TdfType = TdfType::List;
     }
 }
 
@@ -491,6 +709,17 @@ pub mod map {
         }
     }
 
+    impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
+    where
+        K: TdfDeserialize<'de> + TdfTyped + Ord,
+        V: TdfDeserialize<'de> + TdfTyped,
+    {
+        #[inline]
+        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            reader.read_map()
+        }
+    }
+
     impl<K, V> TdfSerialize for TdfMap<K, V>
     where
         K: TdfSerialize + TdfTyped + Ord,
@@ -506,427 +735,170 @@ pub mod map {
         }
     }
 
-    impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
-    where
-        K: TdfDeserialize<'de> + TdfTyped + Ord,
-        V: TdfDeserialize<'de> + TdfTyped,
-    {
-        #[inline]
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
-            reader.read_map()
-        }
-    }
-
     impl<K, V> TdfTyped for TdfMap<K, V> {
         const TYPE: TdfType = TdfType::Map;
     }
 }
 
-pub mod float {
-    use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
-        error::DecodeResult,
-        reader::TdfReader,
-        tag::TdfType,
-        writer::TdfSerializer,
-    };
-
-    impl TdfSerialize for f32 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_f32(*self)
-        }
-    }
-
-    impl TdfDeserializeOwned for f32 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_f32()
-        }
-    }
-
-    impl TdfTyped for f32 {
-        const TYPE: TdfType = TdfType::Float;
-    }
-}
-
-pub mod var_int {
-    use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
-        error::DecodeResult,
-        reader::TdfReader,
-        tag::TdfType,
-        writer::TdfSerializer,
-    };
-
-    impl TdfSerialize for bool {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_bool(*self)
-        }
-    }
-
-    impl TdfDeserializeOwned for bool {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_bool()
-        }
-    }
-
-    impl TdfTyped for bool {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt u8
-
-    impl TdfDeserializeOwned for u8 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_u8()
-        }
-    }
-
-    impl TdfSerialize for u8 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u8(*self)
-        }
-    }
-
-    impl TdfTyped for u8 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt i8
-
-    impl TdfDeserializeOwned for i8 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            let value = reader.read_u8()?;
-            Ok(value as i8)
-        }
-    }
-
-    impl TdfSerialize for i8 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u8(*self as u8)
-        }
-    }
-
-    impl TdfTyped for i8 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt u16
-
-    impl TdfDeserializeOwned for u16 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_u16()
-        }
-    }
-
-    impl TdfSerialize for u16 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u16(*self)
-        }
-    }
-
-    impl TdfTyped for u16 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    impl TdfDeserializeOwned for i16 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            let value = reader.read_u16()?;
-            Ok(value as i16)
-        }
-    }
-
-    // VarInt i16
-
-    impl TdfSerialize for i16 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u16(*self as u16)
-        }
-    }
-
-    impl TdfTyped for i16 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    impl TdfDeserializeOwned for u32 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_u32()
-        }
-    }
-
-    // VarInt u32
-
-    impl TdfSerialize for u32 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u32(*self)
-        }
-    }
-
-    impl TdfTyped for u32 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt i32
-
-    impl TdfDeserializeOwned for i32 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            let value = reader.read_u32()?;
-            Ok(value as i32)
-        }
-    }
-
-    impl TdfSerialize for i32 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u32(*self as u32)
-        }
-    }
-
-    impl TdfTyped for i32 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt u64
-
-    impl TdfDeserializeOwned for u64 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_u64()
-        }
-    }
-
-    impl TdfSerialize for u64 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u64(*self)
-        }
-    }
-
-    impl TdfTyped for u64 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt i64
-
-    impl TdfDeserializeOwned for i64 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            let value = reader.read_u64()?;
-            Ok(value as i64)
-        }
-    }
-
-    impl TdfSerialize for i64 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u64(*self as u64)
-        }
-    }
-
-    impl TdfTyped for i64 {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    // VarInt usize
-
-    impl TdfDeserializeOwned for usize {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_usize()
-        }
-    }
-
-    impl TdfSerialize for usize {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_usize(*self)
-        }
-    }
-
-    impl TdfTyped for usize {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-
-    impl TdfDeserializeOwned for isize {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            let value = reader.read_usize()?;
-            Ok(value as isize)
-        }
-    }
-
-    // VarInt isize
-
-    impl TdfSerialize for isize {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_usize(*self as usize)
-        }
-    }
-
-    impl TdfTyped for isize {
-        const TYPE: TdfType = TdfType::VarInt;
-    }
-}
-
-pub mod string {
-    use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
-        error::DecodeResult,
-        reader::TdfReader,
-        tag::TdfType,
-        writer::TdfSerializer,
-    };
-
-    // str slice types
-
-    impl<'de> TdfDeserialize<'de> for &'de str {
-        #[inline]
-        fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self> {
-            r.read_str()
-        }
-    }
-
-    impl TdfSerialize for &str {
-        #[inline]
-        fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_str(self)
-        }
-    }
-
-    impl TdfTyped for &str {
-        const TYPE: TdfType = TdfType::String;
-    }
-
-    // Owned String types
-
-    impl TdfDeserializeOwned for String {
-        #[inline]
-        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
-            r.read_string()
-        }
-    }
-
-    impl TdfSerialize for String {
-        #[inline]
-        fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_str(self);
-        }
-    }
-
-    impl TdfTyped for String {
-        const TYPE: TdfType = TdfType::String;
-    }
-}
-
-mod blob {
+pub mod tagged_union {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::{DecodeError, DecodeResult},
+        reader::TdfReader,
+        tag::{Tag, TdfType},
+        writer::TdfSerializer,
+    };
+
+    /// Representation of a tagged union
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum TaggedUnion<Value> {
+        /// Set variant of a union value
+        Set { key: u8, tag: Tag, value: Value },
+        /// Unset variant of a union value
+        Unset,
+    }
+
+    impl<Value> TaggedUnion<Value> {
+        /// Key used by tagged unions that have no set value
+        pub const UNSET_KEY: u8 = 0x7F;
+
+        /// Checks if the union is of set type
+        pub fn is_set(&self) -> bool {
+            matches!(self, Self::Set { .. })
+        }
+
+        /// Checks if the union is of unset type
+        pub fn is_unset(&self) -> bool {
+            matches!(self, Self::Unset)
+        }
+
+        /// Unwraps the underlying value stored in this tagged
+        /// union. Will panic if the tagged union is unset
+        pub fn unwrap(self) -> Value {
+            match self {
+                Self::Unset => panic!("Attempted to unwrap unset union"),
+                Self::Set { value, .. } => value,
+            }
+        }
+    }
+
+    impl<Value> From<TaggedUnion<Value>> for Option<Value> {
+        fn from(value: TaggedUnion<Value>) -> Self {
+            match value {
+                TaggedUnion::Set { value, .. } => Some(value),
+                TaggedUnion::Unset => None,
+            }
+        }
+    }
+
+    impl<Value> TdfTyped for TaggedUnion<Value> {
+        const TYPE: TdfType = TdfType::Union;
+    }
+
+    impl<'de, Value> TdfDeserialize<'de> for TaggedUnion<Value>
+    where
+        Value: TdfDeserialize<'de> + TdfTyped,
+    {
+        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            let key = reader.read_byte()?;
+            if key == Self::UNSET_KEY {
+                return Ok(TaggedUnion::Unset);
+            }
+            let tag = reader.read_tag()?;
+            let expected_type = Value::TYPE;
+            let actual_type = tag.ty;
+            if actual_type != expected_type {
+                return Err(DecodeError::InvalidType {
+                    expected: expected_type,
+                    actual: actual_type,
+                });
+            }
+            let value = Value::deserialize(reader)?;
+
+            Ok(TaggedUnion::Set {
+                key,
+                tag: tag.tag,
+                value,
+            })
+        }
+    }
+
+    impl<Value> TdfSerialize for TaggedUnion<Value>
+    where
+        Value: TdfSerialize + TdfTyped,
+    {
+        fn serialize(&self, output: &mut TdfSerializer) {
+            match self {
+                TaggedUnion::Set { key, tag, value } => {
+                    output.write_byte(*key);
+                    output.tag(&tag.0, Value::TYPE);
+                    value.serialize(output);
+                }
+                TaggedUnion::Unset => output.write_byte(Self::UNSET_KEY),
+            }
+        }
+    }
+}
+
+pub mod var_int_list {
+    use crate::{
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
         reader::TdfReader,
         tag::TdfType,
         writer::TdfSerializer,
     };
 
-    /// [Blob] is a structure representing a variable length chunk
-    /// of bytes with the length deliminated by a variable-length integer
-    /// followed by the chunk of bytes
-    ///
-    /// The [String] structure uses the same underlying logic but wraps
-    /// extra utf8 parsing on top
-    #[derive(Default, Debug, Clone, PartialEq, Eq)]
-    pub struct Blob<'de>(pub &'de [u8]);
+    /// Wrapper type for a list of variable-length integers.
+    /// Represented using a Vec of u64 values
+    #[derive(Debug, PartialEq, Eq, Default, Clone)]
+    pub struct VarIntList(pub Vec<u64>);
 
-    impl AsRef<[u8]> for Blob<'_> {
-        fn as_ref(&self) -> &[u8] {
+    impl VarIntList {
+        /// Creates a new VarIntList
+        pub fn new() -> Self {
+            Self(Vec::default())
+        }
+
+        /// Consumes self returning the underlying
+        /// Vec storing the variable-length integer values
+        pub fn into_inner(self) -> Vec<u64> {
             self.0
         }
     }
 
-    impl TdfSerialize for Blob<'_> {
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_usize(self.0.len());
-            output.write_slice(self.0);
+    impl From<Vec<u64>> for VarIntList {
+        fn from(value: Vec<u64>) -> Self {
+            Self(value)
         }
     }
 
-    impl<'de> TdfDeserialize<'de> for Blob<'de> {
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
-            let bytes = reader.read_blob()?;
-            Ok(Blob(bytes))
+    impl AsRef<[u64]> for VarIntList {
+        fn as_ref(&self) -> &[u64] {
+            self.0.as_ref()
         }
     }
 
-    impl TdfTyped for Blob<'_> {
-        const TYPE: TdfType = TdfType::Blob;
-    }
-}
-
-pub mod list {
-    use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
-        error::DecodeResult,
-        reader::TdfReader,
-        tag::TdfType,
-        writer::TdfSerializer,
-    };
-
-    impl<'de, C> TdfDeserialize<'de> for Vec<C>
-    where
-        C: TdfDeserialize<'de> + TdfTyped,
-    {
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
-            reader.expect_type(C::TYPE)?;
-
+    impl TdfDeserializeOwned for VarIntList {
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
             let length = reader.read_usize()?;
-            let mut values = Vec::with_capacity(length);
-
+            let mut out = Vec::with_capacity(length);
             for _ in 0..length {
-                values.push(C::deserialize(reader)?);
+                out.push(reader.read_u64()?);
             }
-            Ok(values)
+            Ok(VarIntList(out))
         }
     }
 
-    impl<V> TdfSerialize for Vec<V>
-    where
-        V: TdfSerialize + TdfTyped,
-    {
-        #[inline]
+    impl TdfSerialize for VarIntList {
         fn serialize(&self, w: &mut TdfSerializer) {
-            self.as_slice().serialize(w)
+            w.write_usize(self.0.len());
+            self.0.iter().copied().for_each(|value| w.write_u64(value));
         }
     }
 
-    impl<V> TdfTyped for Vec<V> {
-        const TYPE: TdfType = TdfType::List;
-    }
-
-    impl<V> TdfSerialize for &[V]
-    where
-        V: TdfSerialize + TdfTyped,
-    {
-        fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_type(V::TYPE);
-            w.write_usize(self.len());
-            self.iter().for_each(|value| value.serialize(w));
-        }
-    }
-
-    impl<C> TdfTyped for &[C]
-    where
-        C: TdfSerialize + TdfTyped,
-    {
-        const TYPE: TdfType = TdfType::List;
+    impl TdfTyped for VarIntList {
+        const TYPE: TdfType = TdfType::VarIntList;
     }
 }
 
@@ -1105,6 +1077,34 @@ pub mod object_id {
 
             assert_eq!(&r.buffer, expected)
         }
+    }
+}
+
+pub mod float {
+    use crate::{
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
+
+    impl TdfDeserializeOwned for f32 {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_f32()
+        }
+    }
+
+    impl TdfSerialize for f32 {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_f32(*self)
+        }
+    }
+
+    impl TdfTyped for f32 {
+        const TYPE: TdfType = TdfType::Float;
     }
 }
 
