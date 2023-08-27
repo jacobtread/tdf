@@ -31,6 +31,20 @@ pub trait TdfSerialize: Sized {
     }
 }
 
+pub trait TdfSerializeOwned: Sized {
+    fn serialize_owned(self, w: &mut TdfSerializer);
+}
+
+impl<T> TdfSerialize for T
+where
+    T: TdfSerializeOwned + Copy,
+{
+    #[inline]
+    fn serialize(&self, w: &mut TdfSerializer) {
+        (*self).serialize_owned(w)
+    }
+}
+
 /// Associated trait for types that can be encoded/decoded
 /// as a specific [TdfType] rather than just a generic
 /// encoding and decoding

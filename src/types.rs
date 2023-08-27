@@ -960,7 +960,7 @@ pub mod object_type {
 
         /// Tests that object types can be correctly serialized
         #[test]
-        fn test_serialize_object_id() {
+        fn test_encode_object_id() {
             let mut w = TdfSerializer::default();
             let object_type = ObjectType {
                 component: 30722,
@@ -1051,7 +1051,7 @@ pub mod object_id {
 
         /// Tests that object IDs can be correctly serialized
         #[test]
-        fn test_serialize_object_id() {
+        fn test_encode_object_id() {
             let mut w = TdfSerializer::default();
             let object_id = ObjectId {
                 ty: ObjectType {
@@ -1081,8 +1081,9 @@ pub mod object_id {
 }
 
 pub mod float {
+
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfReader,
         tag::TdfType,
@@ -1090,21 +1091,55 @@ pub mod float {
     };
 
     impl TdfDeserializeOwned for f32 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-            reader.read_f32()
+        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+            let bytes: [u8; 4] = r.read_bytes()?;
+            Ok(f32::from_be_bytes(bytes))
         }
     }
 
-    impl TdfSerialize for f32 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_f32(*self)
+    impl TdfSerializeOwned for f32 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            let bytes: [u8; 4] = self.to_be_bytes();
+            w.write_slice(&bytes);
         }
     }
 
     impl TdfTyped for f32 {
         const TYPE: TdfType = TdfType::Float;
+    }
+
+    #[cfg(test)]
+    mod test {
+        use crate::{
+            codec::TdfDeserializeOwned, codec::TdfSerialize, reader::TdfReader,
+            writer::TdfSerializer,
+        };
+
+        /// Tests f32 encoding and decoding
+        #[test]
+        fn test_float_encoding() {
+            let data: &[(f32, [u8; 4])] = &[
+                (123.0, [66, 246, 0, 0]),
+                (254.0, [67, 126, 0, 0]),
+                (1.0, [63, 128, 0, 0]),
+                (-3.0, [192, 64, 0, 0]),
+            ];
+
+            let mut w = TdfSerializer::default();
+            for (value, expected) in data {
+                // Check serialized buffer matches expected bytes
+                value.serialize(&mut w);
+                assert_eq!(&w.buffer, expected);
+
+                // Check that the deserialize works correctly
+                let mut r = TdfReader::new(&w.buffer);
+                let read_value = f32::deserialize_owned(&mut r).unwrap();
+                assert_eq!(read_value, *value);
+
+                // Reset writer for next iteration
+                w.clear();
+            }
+        }
     }
 }
 

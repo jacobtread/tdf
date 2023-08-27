@@ -347,15 +347,6 @@ impl TdfSerializer {
         self.buffer.extend_from_slice(&[1, 0])
     }
 
-    /// Writes 32 bit float value to the underlying buffer in
-    /// big-endian byte order.
-    ///
-    /// `value` The float value to write
-    pub fn write_f32(&mut self, value: f32) {
-        let bytes: [u8; 4] = value.to_be_bytes();
-        self.buffer.extend_from_slice(&bytes);
-    }
-
     /// Writes a u8 value using the VarInt encoding
     ///
     /// `value` The value to write
@@ -462,7 +453,12 @@ impl From<TdfSerializer> for Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::TdfSerializer;
-    use crate::{codec::TdfSerialize, reader::TdfReader, tag::TdfType, types::TaggedUnion};
+    use crate::{
+        codec::{TdfSerialize, TdfSerializeOwned},
+        reader::TdfReader,
+        tag::TdfType,
+        types::TaggedUnion,
+    };
 
     /// Test for ensuring some common tags of different
     /// length are encoded to the correct values. The tags
@@ -826,7 +822,8 @@ mod test {
         let mut value: f32 = 1.0;
         while value < f32::MAX {
             let expected = value.to_be_bytes();
-            writer.write_f32(value);
+
+            value.serialize_owned(&mut writer);
             assert_eq!(&writer.buffer, &expected);
             writer.clear();
             value *= 2.0;
