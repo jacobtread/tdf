@@ -1,6 +1,88 @@
-//! Writer buffer implementation for writing different kinds of tdf values
-//! to byte form without creating a new structure [`TdfWriter`]
-
+//! Serializastion and writing for the Tdf format.
+//!
+//! This module provides a writer [TdfSerializer] structure for writing tags
+//! and raw/special values to a buffer for serialization.
+//!
+//! ## Tagging
+//!
+//! ### Structures
+//!
+//! When writing tagged structures you provide the by reference to the
+//! [TdfSerializer::tag_ref] function:
+//!
+//! TODO: Update code example to include a structure instead
+//!
+//! ```
+//! use tdf::writer::TdfSerializer;
+//!
+//! let mut w = TdfSerializer::default();
+//! w.tag_ref(b"TEST", &1);
+//!
+//! ```
+//!
+//! ### Tagging strings, and slices
+//! When tagging strings and slices you should use the [TdfSerializer::tag_alt]
+//! function:
+//!
+//! ```
+//! use tdf::writer::TdfSerializer;
+//!
+//! let mut w = TdfSerializer::default();
+//!
+//! w.tag_owned(b"TEST", false);
+//! w.tag_owned(b"TEST", 123u8);
+//! w.tag_owned(b"TEST", 123u64);
+//! ```
+//!
+//! ### Tagging primitives / owned values
+//!
+//! When tagging values like primitives you should use [TdfSerializer::tag_owned]
+//! or one the the [Dedicated Tagging](#dedicated-tagging) functions provided
+//!
+//! ```
+//! use tdf::writer::TdfSerializer;
+//!
+//! let mut w = TdfSerializer::default();
+//!
+//! w.tag_owned(b"TEST", false);
+//! w.tag_owned(b"TEST", 123u8);
+//! w.tag_owned(b"TEST", 123u64);
+//! ```
+//!
+//! > When you are hardcoding values like the above `123u8` and `123u64` number values you
+//! > should instead use the [Dedicated Tagging](#dedicated-tagging) functions so that you
+//! > can omit the type
+//!
+//! ### Dedicated Tagging
+//!
+//! Below are dedicated tagging functions for specific value types or circumstances. These
+//! are most useful when hardcoding in primitve values or typed values without having to
+//! specify the type
+//!
+//! #### Integer Functions
+//!
+//! * [TdfSerializer::tag_zero] (0) - Special function for writing a zero integer value
+//! * [TdfSerializer::tag_bool] ([bool]) - Function for tagging boolean values
+//! * [TdfSerializer::tag_u8] ([u8]) - Function for tagging unsigned 8 bit integers
+//! * [TdfSerializer::tag_u16] ([u16]) - Function for tagging unsigned 16 bit integers
+//! * [TdfSerializer::tag_u32] ([u32]) - Function for tagging unsigned 32 bit integers
+//! * [TdfSerializer::tag_u64] ([u64]) - Function for tagging unsigned 64 bit integers
+//! * [TdfSerializer::tag_usize] ([usize]) - Function for tagging usize integers
+//!
+//! #### String Functions
+//!
+//! * [TdfSerializer::tag_str_empty] ("") Special function for writing an empty string
+//! * [TdfSerializer::tag_str] ([&str]) Function for tagging a string slice
+//!
+//! #### Blob Functions
+//!
+//! * [TdfSerializer::tag_blob_empty] ([Blob]) Special function for tagging an empty blob value
+//! * [TdfSerializer::tag_blob] (&[u8]) Function for tagging blob values directly from a byte slice
+//!
+//! #### List Functions
+//!
+//! * [TdfSerializer::tag_list_start] - Special functions for writing a list header (Used to manually write list impl for complex types)
+//! * [TdfSerializer::tag_list_empty] - Special function for writing an empty list
 use crate::{
     codec::TdfSerializeOwned,
     tag::{RawTag, Tagged},
@@ -162,7 +244,7 @@ impl TdfSerializer {
 
     // Blob tagging
 
-    pub fn tag_empty_blob(&mut self, tag: RawTag) {
+    pub fn tag_blob_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Blob);
         self.write_byte(0);
     }
