@@ -81,7 +81,8 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for bool {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        #[inline]
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             w.write_byte(self as u8)
         }
     }
@@ -99,7 +100,7 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for u8 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w)
         }
     }
@@ -118,7 +119,8 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for i8 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        #[inline]
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             (self as u8).serialize_owned(w)
         }
     }
@@ -136,7 +138,7 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for u16 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w)
         }
     }
@@ -156,7 +158,7 @@ pub mod var_int {
 
     impl TdfSerializeOwned for i16 {
         #[inline]
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             (self as u16).serialize_owned(w);
         }
     }
@@ -174,7 +176,7 @@ pub mod var_int {
     // VarInt u32
 
     impl TdfSerializeOwned for u32 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w)
         }
     }
@@ -194,7 +196,7 @@ pub mod var_int {
 
     impl TdfSerializeOwned for i32 {
         #[inline]
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             (self as u32).serialize_owned(w);
         }
     }
@@ -212,7 +214,7 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for u64 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w);
         }
     }
@@ -231,7 +233,8 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for i64 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        #[inline]
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             (self as u64).serialize_owned(w);
         }
     }
@@ -249,7 +252,7 @@ pub mod var_int {
     }
 
     impl TdfSerializeOwned for usize {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w);
         }
     }
@@ -268,7 +271,8 @@ pub mod var_int {
     // VarInt isize
 
     impl TdfSerializeOwned for isize {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        #[inline]
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             (self as usize).serialize_owned(w);
         }
     }
@@ -282,12 +286,11 @@ pub mod var_int {
         use crate::{
             codec::{TdfDeserializeOwned, TdfSerialize},
             reader::TdfDeserializer,
-            writer::TdfSerializer,
         };
 
         #[test]
         fn test_u64_encoding() {
-            let mut w = TdfSerializer::default();
+            let mut w = Vec::new();
 
             let values: &[(u64, &[u8])] = &[
                 (5, &[5]),
@@ -311,9 +314,9 @@ pub mod var_int {
 
             for (value, expected) in values {
                 value.serialize(&mut w);
-                assert_eq!(&w.buffer, expected);
+                assert_eq!(&w, expected);
 
-                let mut r = TdfDeserializer::new(&w.buffer);
+                let mut r = TdfDeserializer::new(&w);
                 let read_value = u64::deserialize_owned(&mut r).unwrap();
                 assert_eq!(read_value, *value);
 
@@ -336,7 +339,7 @@ pub mod string {
 
     // str slice types
 
-    pub fn write_empty_str(w: &mut TdfSerializer) {
+    pub fn write_empty_str<S: TdfSerializer>(w: &mut S) {
         w.write_slice(&[1, 0]);
     }
 
@@ -355,7 +358,7 @@ pub mod string {
     }
 
     impl TdfSerialize for &str {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             let bytes = self.as_bytes();
             let needs_terminator = !matches!(bytes.last(), Some(0));
             let mut length = bytes.len();
@@ -391,7 +394,7 @@ pub mod string {
 
     impl TdfSerialize for String {
         #[inline]
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             self.as_str().serialize(w);
         }
     }
@@ -426,7 +429,7 @@ pub mod blob {
     }
 
     impl Blob<'_> {
-        pub fn serialize_raw(w: &mut TdfSerializer, slice: &[u8]) {
+        pub fn serialize_raw<S: TdfSerializer>(w: &mut S, slice: &[u8]) {
             slice.len().serialize_owned(w);
             w.write_slice(slice);
         }
@@ -452,7 +455,7 @@ pub mod blob {
 
     impl TdfSerialize for Blob<'_> {
         #[inline]
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             Self::serialize_raw(w, self.0)
         }
     }
@@ -480,7 +483,7 @@ pub mod list {
         Ok(())
     }
 
-    pub fn serialize_list_header(w: &mut TdfSerializer, ty: TdfType, length: usize) {
+    pub fn serialize_list_header<S: TdfSerializer>(w: &mut S, ty: TdfType, length: usize) {
         ty.serialize_owned(w);
         length.serialize_owned(w);
     }
@@ -507,7 +510,7 @@ pub mod list {
         V: TdfSerialize + TdfTyped,
     {
         #[inline]
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             self.as_slice().serialize(w)
         }
     }
@@ -520,7 +523,7 @@ pub mod list {
     where
         V: TdfSerialize + TdfTyped,
     {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             serialize_list_header(w, V::TYPE, self.len());
             self.iter().for_each(|value| value.serialize(w));
         }
@@ -863,8 +866,8 @@ pub mod map {
         Ok((key_type, value_type, length))
     }
 
-    pub fn serialize_map_header(
-        w: &mut TdfSerializer,
+    pub fn serialize_map_header<S: TdfSerializer>(
+        w: &mut S,
         key_type: TdfType,
         value_type: TdfType,
         length: usize,
@@ -919,7 +922,7 @@ pub mod map {
         K: TdfSerialize + TdfTyped + Ord,
         V: TdfSerialize + TdfTyped,
     {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             serialize_map_header(w, K::TYPE, V::TYPE, self.len());
 
             self.data.iter().for_each(|(key, value)| {
@@ -1029,7 +1032,7 @@ pub mod tagged_union {
     where
         Value: TdfSerialize + TdfTyped,
     {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             match self {
                 TaggedUnion::Set { key, tag, value } => {
                     w.write_byte(*key);
@@ -1103,7 +1106,7 @@ pub mod var_int_list {
     }
 
     impl TdfSerialize for VarIntList {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             self.0.len().serialize_owned(w);
             self.0
                 .iter()
@@ -1160,7 +1163,7 @@ pub mod object_type {
     }
 
     impl TdfSerialize for ObjectType {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             self.component.serialize_owned(w);
             self.ty.serialize_owned(w);
         }
@@ -1175,7 +1178,6 @@ pub mod object_type {
         use crate::{
             codec::{TdfDeserialize, TdfSerialize},
             reader::TdfDeserializer,
-            writer::TdfSerializer,
         };
 
         use super::ObjectType;
@@ -1183,7 +1185,7 @@ pub mod object_type {
         /// Tests that object types can be correctly serialized
         #[test]
         fn test_encode_object_id() {
-            let mut w = TdfSerializer::default();
+            let mut w = Vec::new();
             let object_type = ObjectType {
                 component: 30722,
                 ty: 1,
@@ -1191,7 +1193,7 @@ pub mod object_type {
             object_type.serialize(&mut w);
 
             // Check deserialize works correctly
-            let mut r = TdfDeserializer::new(&w.buffer);
+            let mut r = TdfDeserializer::new(&w);
             let value = ObjectType::deserialize(&mut r).unwrap();
             assert_eq!(object_type, value);
 
@@ -1255,7 +1257,7 @@ pub mod object_id {
     }
 
     impl TdfSerialize for ObjectId {
-        fn serialize(&self, w: &mut TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             self.ty.serialize(w);
             self.id.serialize_owned(w);
         }
@@ -1271,7 +1273,6 @@ pub mod object_id {
             codec::{TdfDeserialize, TdfSerialize},
             reader::TdfDeserializer,
             types::object_type::ObjectType,
-            writer::TdfSerializer,
         };
 
         use super::ObjectId;
@@ -1279,7 +1280,7 @@ pub mod object_id {
         /// Tests that object IDs can be correctly serialized
         #[test]
         fn test_encode_object_id() {
-            let mut w = TdfSerializer::default();
+            let mut w = Vec::new();
             let object_id = ObjectId {
                 ty: ObjectType {
                     component: 30722,
@@ -1290,7 +1291,7 @@ pub mod object_id {
             object_id.serialize(&mut w);
 
             // Check deserialize works correctly
-            let mut r = TdfDeserializer::new(&w.buffer);
+            let mut r = TdfDeserializer::new(&w);
             let value = ObjectId::deserialize(&mut r).unwrap();
             assert_eq!(object_id.ty, value.ty);
             assert_eq!(object_id.id, value.id);
@@ -1331,7 +1332,7 @@ pub mod float {
     }
 
     impl TdfSerializeOwned for f32 {
-        fn serialize_owned(self, w: &mut TdfSerializer) {
+        fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             let bytes: [u8; 4] = self.to_be_bytes();
             w.write_slice(&bytes);
         }
@@ -1343,10 +1344,7 @@ pub mod float {
 
     #[cfg(test)]
     mod test {
-        use crate::{
-            codec::TdfDeserializeOwned, codec::TdfSerialize, reader::TdfDeserializer,
-            writer::TdfSerializer,
-        };
+        use crate::{codec::TdfDeserializeOwned, codec::TdfSerialize, reader::TdfDeserializer};
 
         /// Tests f32 encoding and decoding
         #[test]
@@ -1358,14 +1356,14 @@ pub mod float {
                 (-3.0, [192, 64, 0, 0]),
             ];
 
-            let mut w = TdfSerializer::default();
+            let mut w = Vec::new();
             for (value, expected) in data {
                 // Check serialized buffer matches expected bytes
                 value.serialize(&mut w);
-                assert_eq!(&w.buffer, expected);
+                assert_eq!(&w, expected);
 
                 // Check that the deserialize works correctly
-                let mut r = TdfDeserializer::new(&w.buffer);
+                let mut r = TdfDeserializer::new(&w);
                 let read_value = f32::deserialize_owned(&mut r).unwrap();
                 assert_eq!(read_value, *value);
 
@@ -1382,6 +1380,7 @@ pub mod u12 {
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
+        writer::TdfSerializer,
     };
 
     /// [U12] The type/name for this structure is not yet known
@@ -1402,7 +1401,7 @@ pub mod u12 {
     }
 
     impl TdfSerialize for U12<'_> {
-        fn serialize(&self, w: &mut crate::writer::TdfSerializer) {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             w.write_slice(&self.data);
             self.value.serialize(w);
         }

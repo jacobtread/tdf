@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "tdf-derive"]
+members = ["."]
 
 [workspace.package]
 edition = "2021"
@@ -27,7 +27,7 @@ readme.workspace = true
 bytes = "1"
 serde = { version = "1.0", optional = true }
 bitflags = "^2.3"
-tdf-derive = { path = "./tdf-derive" }
+# tdf-derive = { path = "./tdf-derive" }
 
 [features]
 # Default features enables BlazeSSL and serde

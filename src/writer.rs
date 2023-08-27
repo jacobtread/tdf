@@ -15,7 +15,7 @@
 //! ```
 //! use tdf::writer::TdfSerializer;
 //!
-//! let mut w = TdfSerializer::default();
+//! let mut w = Vec::new();
 //! w.tag_ref(b"TEST", &1);
 //!
 //! ```
@@ -27,7 +27,7 @@
 //! ```
 //! use tdf::writer::TdfSerializer;
 //!
-//! let mut w = TdfSerializer::default();
+//! let mut w = Vec::new();
 //!
 //! w.tag_owned(b"TEST", false);
 //! w.tag_owned(b"TEST", 123u8);
@@ -42,7 +42,7 @@
 //! ```
 //! use tdf::writer::TdfSerializer;
 //!
-//! let mut w = TdfSerializer::default();
+//! let mut w = Vec::new();
 //!
 //! w.tag_owned(b"TEST", false);
 //! w.tag_owned(b"TEST", 123u8);
@@ -132,32 +132,26 @@
 //! Below are some extra functions for performing operatings on a buffer
 //!
 //! * [clear](TdfSerializer::clear) - Clears the underlying write buffer, use this if you want to re-use the same writer
-//!
+//! * [into_inner](TdfSerializer::into_inner) - Consumes self returning the buffer within
+//! * [buffer](TdfSerializer::buffer) - Returns a slice to the buffer within
+//! * [shrink_to](TdfSerializer::shrink_to) - Shrinks the capacity of the underlying buffer
 
 use crate::{
-    codec::TdfSerializeOwned,
-    tag::{RawTag, Tagged},
+    codec::{TdfSerialize, TdfSerializeOwned, TdfTyped},
+    tag::{RawTag, Tagged, TdfType},
     types::{
         list::serialize_list_header, map::serialize_map_header, string::write_empty_str,
         tagged_union::TAGGED_UNSET_KEY, Blob,
     },
 };
 
-use super::{
-    codec::{TdfSerialize, TdfTyped},
-    tag::TdfType,
-};
+/// [TdfSerializer] provides functions for writing tag values to a buffer for serialization.
+/// See [module documentation](crate::writer) for usage
+pub trait TdfSerializer: Sized {
+    fn write_byte(&mut self, value: u8);
 
-/// Writer implementation for writing values to an underlying buffer
-/// this writer implementation provides functions for writing certain
-/// data types in their Blaze format
-#[derive(Default)]
-pub struct TdfSerializer {
-    /// The buffer that will be written to
-    pub buffer: Vec<u8>,
-}
+    fn write_slice(&mut self, value: &[u8]);
 
-impl TdfSerializer {
     /// Serializes the provided tag and value from a
     /// reference.
     ///
@@ -170,7 +164,7 @@ impl TdfSerializer {
     /// ```
     /// use tdf::writer::TdfSerializer;
     ///
-    /// let mut w = TdfSerializer::default();
+    /// let mut w = Vec::new();
     /// w.tag_ref(b"TEST", &1);
     ///
     /// ```
@@ -178,7 +172,7 @@ impl TdfSerializer {
     /// # Arguments
     /// * tag - The tag to use for this field
     /// * value - The value to serialize
-    pub fn tag_ref<V>(&mut self, tag: RawTag, value: &V)
+    fn tag_ref<V>(&mut self, tag: RawTag, value: &V)
     where
         V: TdfSerialize + TdfTyped,
     {
@@ -195,7 +189,7 @@ impl TdfSerializer {
     /// ```
     /// use tdf::writer::TdfSerializer;
     ///
-    /// let mut w = TdfSerializer::default();
+    /// let mut w = Vec::new();
     /// let test_slice: &[u8] = &[0,5,12,23,255];
     ///
     /// w.tag_alt(b"TEST", "Example value");
@@ -205,7 +199,7 @@ impl TdfSerializer {
     /// # Arguments
     /// * tag - The tag to use for this field
     /// * value - The value to serialize
-    pub fn tag_alt<V>(&mut self, tag: RawTag, value: V)
+    fn tag_alt<V>(&mut self, tag: RawTag, value: V)
     where
         V: TdfSerialize + TdfTyped,
     {
@@ -226,7 +220,7 @@ impl TdfSerializer {
     /// ```
     /// use tdf::writer::TdfSerializer;
     ///
-    /// let mut w = TdfSerializer::default();
+    /// let mut w = Vec::new();
     ///
     /// w.tag_owned(b"TEST", false);
     /// w.tag_owned(b"TEST", 123u8);
@@ -236,7 +230,7 @@ impl TdfSerializer {
     /// # Arguments
     /// * tag - The tag to use for this field
     /// * value - The owned value to serialize
-    pub fn tag_owned<V>(&mut self, tag: RawTag, value: V)
+    fn tag_owned<V>(&mut self, tag: RawTag, value: V)
     where
         V: TdfSerializeOwned + TdfTyped,
     {
@@ -246,61 +240,61 @@ impl TdfSerializer {
 
     // Primitive integer tagging
 
-    pub fn tag_zero(&mut self, tag: RawTag) {
+    fn tag_zero(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::VarInt);
         self.write_byte(0);
     }
 
     #[inline]
-    pub fn tag_bool(&mut self, tag: RawTag, value: bool) {
+    fn tag_bool(&mut self, tag: RawTag, value: bool) {
         self.tag_owned(tag, value);
     }
 
     #[inline]
-    pub fn tag_u8(&mut self, tag: RawTag, value: u8) {
+    fn tag_u8(&mut self, tag: RawTag, value: u8) {
         self.tag_owned(tag, value);
     }
 
     #[inline]
-    pub fn tag_u16(&mut self, tag: RawTag, value: u16) {
+    fn tag_u16(&mut self, tag: RawTag, value: u16) {
         self.tag_owned(tag, value);
     }
 
     #[inline]
-    pub fn tag_u32(&mut self, tag: RawTag, value: u32) {
+    fn tag_u32(&mut self, tag: RawTag, value: u32) {
         self.tag_owned(tag, value);
     }
 
     #[inline]
-    pub fn tag_u64(&mut self, tag: RawTag, value: u64) {
+    fn tag_u64(&mut self, tag: RawTag, value: u64) {
         self.tag_owned(tag, value);
     }
 
     #[inline]
-    pub fn tag_usize(&mut self, tag: RawTag, value: usize) {
+    fn tag_usize(&mut self, tag: RawTag, value: usize) {
         self.tag_owned(tag, value);
     }
 
     // String tagging
 
-    pub fn tag_str_empty(&mut self, tag: RawTag) {
+    fn tag_str_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::String);
         write_empty_str(self);
     }
 
     #[inline]
-    pub fn tag_str(&mut self, tag: RawTag, value: &str) {
+    fn tag_str(&mut self, tag: RawTag, value: &str) {
         self.tag_alt(tag, value);
     }
 
     // Blob tagging
 
-    pub fn tag_blob_empty(&mut self, tag: RawTag) {
+    fn tag_blob_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Blob);
         self.write_byte(0);
     }
 
-    pub fn tag_blob(&mut self, tag: RawTag, blob: &[u8]) {
+    fn tag_blob(&mut self, tag: RawTag, blob: &[u8]) {
         Tagged::serialize_raw(self, tag, TdfType::Blob);
         Blob::serialize_raw(self, blob);
     }
@@ -308,17 +302,17 @@ impl TdfSerializer {
     // Group tagging
 
     #[inline]
-    pub fn tag_group(&mut self, tag: RawTag) {
+    fn tag_group(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Group);
     }
 
     #[inline]
-    pub fn tag_group_end(&mut self) {
+    fn tag_group_end(&mut self) {
         self.write_byte(0);
     }
 
     #[inline]
-    pub fn group<F>(&mut self, tag: RawTag, gr: F)
+    fn group<F>(&mut self, tag: RawTag, gr: F)
     where
         F: FnOnce(&mut Self),
     {
@@ -329,18 +323,18 @@ impl TdfSerializer {
 
     // List tagging
 
-    pub fn tag_list_start(&mut self, tag: RawTag, ty: TdfType, length: usize) {
+    fn tag_list_start(&mut self, tag: RawTag, ty: TdfType, length: usize) {
         Tagged::serialize_raw(self, tag, TdfType::List);
         serialize_list_header(self, ty, length);
     }
 
     #[inline]
-    pub fn tag_list_empty(&mut self, tag: RawTag, ty: TdfType) {
+    fn tag_list_empty(&mut self, tag: RawTag, ty: TdfType) {
         self.tag_list_start(tag, ty, 0);
     }
 
     #[inline]
-    pub fn tag_list_slice<V>(&mut self, tag: RawTag, value: &[V])
+    fn tag_list_slice<V>(&mut self, tag: RawTag, value: &[V])
     where
         V: TdfSerialize + TdfTyped,
     {
@@ -348,7 +342,7 @@ impl TdfSerializer {
     }
 
     #[inline]
-    pub fn tag_list_slice_ref<V>(&mut self, tag: RawTag, value: &[&V])
+    fn tag_list_slice_ref<V>(&mut self, tag: RawTag, value: &[&V])
     where
         V: TdfSerialize + TdfTyped,
     {
@@ -357,7 +351,7 @@ impl TdfSerializer {
     }
 
     #[inline]
-    pub fn tag_list_iter<I, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_list_iter<I, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = V> + ExactSizeIterator,
         V: TdfSerialize + TdfTyped,
@@ -368,7 +362,7 @@ impl TdfSerializer {
 
     /// Tag list iter but for ref values
     #[inline]
-    pub fn tag_list_iter_ref<'i, I, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_list_iter_ref<'i, I, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = &'i V> + ExactSizeIterator,
         V: TdfSerialize + TdfTyped + 'i,
@@ -379,7 +373,7 @@ impl TdfSerializer {
 
     /// Tag list iter but for owned values
     #[inline]
-    pub fn tag_list_iter_owned<'i, I, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_list_iter_owned<'i, I, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = V> + ExactSizeIterator,
         V: TdfSerializeOwned + TdfTyped + 'i,
@@ -390,12 +384,12 @@ impl TdfSerializer {
 
     // Var int list tagging
 
-    pub fn tag_var_int_list_empty(&mut self, tag: RawTag) {
+    fn tag_var_int_list_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::VarIntList);
         self.write_byte(0);
     }
 
-    pub fn tag_var_int_list(&mut self, tag: RawTag, values: &[u64]) {
+    fn tag_var_int_list(&mut self, tag: RawTag, values: &[u64]) {
         Tagged::serialize_raw(self, tag, TdfType::VarIntList);
         values.len().serialize_owned(self);
         values
@@ -406,13 +400,13 @@ impl TdfSerializer {
 
     // Map tagging
 
-    pub fn tag_map_start(&mut self, tag: RawTag, key: TdfType, value: TdfType, length: usize) {
+    fn tag_map_start(&mut self, tag: RawTag, key: TdfType, value: TdfType, length: usize) {
         Tagged::serialize_raw(self, tag, TdfType::Map);
         serialize_map_header(self, key, value, length);
     }
 
     #[inline]
-    pub fn tag_map_tuples<K, V>(&mut self, tag: RawTag, values: &[(K, V)])
+    fn tag_map_tuples<K, V>(&mut self, tag: RawTag, values: &[(K, V)])
     where
         K: TdfSerialize + TdfTyped,
         V: TdfSerialize + TdfTyped,
@@ -420,7 +414,7 @@ impl TdfSerializer {
         self.tag_map_iter_ref(tag, values.iter())
     }
 
-    pub fn tag_map_iter<I, K, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_map_iter<I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = (K, V)> + ExactSizeIterator,
         K: TdfSerialize + TdfTyped,
@@ -433,7 +427,7 @@ impl TdfSerializer {
         });
     }
 
-    pub fn tag_map_iter_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_map_iter_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = &'i (K, V)> + ExactSizeIterator,
         K: TdfSerialize + TdfTyped + 'i,
@@ -446,7 +440,7 @@ impl TdfSerializer {
         });
     }
 
-    pub fn tag_map_iter_ref_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_map_iter_ref_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = &'i (&'i K, &'i V)> + ExactSizeIterator,
         K: TdfSerialize + TdfTyped + 'i,
@@ -459,7 +453,7 @@ impl TdfSerializer {
         });
     }
 
-    pub fn tag_map_iter_owned<I, K, V>(&mut self, tag: RawTag, iter: I)
+    fn tag_map_iter_owned<I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = (K, V)> + ExactSizeIterator,
         K: TdfSerializeOwned + TdfTyped,
@@ -474,13 +468,13 @@ impl TdfSerializer {
 
     // Union tagging
 
-    pub fn tag_union_start(&mut self, tag: RawTag, key: u8) {
+    fn tag_union_start(&mut self, tag: RawTag, key: u8) {
         Tagged::serialize_raw(self, tag, TdfType::TaggedUnion);
         self.write_byte(key);
     }
 
     #[inline]
-    pub fn tag_union_value<V>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &V)
+    fn tag_union_value<V>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &V)
     where
         V: TdfSerialize + TdfTyped,
     {
@@ -489,30 +483,21 @@ impl TdfSerializer {
     }
 
     #[inline]
-    pub fn tag_union_unset(&mut self, tag: RawTag) {
+    fn tag_union_unset(&mut self, tag: RawTag) {
         self.tag_union_start(tag, TAGGED_UNSET_KEY);
     }
 
     // Buffer functions
-
-    #[inline]
-    pub(crate) fn write_byte(&mut self, value: u8) {
-        self.buffer.push(value)
-    }
-
-    #[inline]
-    pub(crate) fn write_slice(&mut self, value: &[u8]) {
-        self.buffer.extend_from_slice(value);
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.buffer.clear();
-    }
 }
 
-impl From<TdfSerializer> for Vec<u8> {
-    fn from(value: TdfSerializer) -> Self {
-        value.buffer
+impl TdfSerializer for Vec<u8> {
+    #[inline]
+    fn write_byte(&mut self, value: u8) {
+        self.push(value);
+    }
+
+    #[inline]
+    fn write_slice(&mut self, value: &[u8]) {
+        self.extend_from_slice(value);
     }
 }

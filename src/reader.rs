@@ -13,7 +13,7 @@ use crate::types::{
     map::{deserialize_map_header, skip_map},
     tagged_union::{skip_tagged_union, TAGGED_UNSET_KEY},
     var_int::skip_var_int,
-    Blob, ObjectId, ObjectType, TaggedUnion, VarIntList,
+    Blob, ObjectId, ObjectType, VarIntList,
 };
 
 /// Buffered readable implementation. Allows reading through the

@@ -12,7 +12,7 @@ use std::fmt::{Debug, Display, Write};
 
 /// Represents a raw byte tag string for example:
 /// ```
-/// b"TEST"
+/// let tag: &[u8] = b"TEST";
 /// ```
 pub type RawTag<'a> = &'a [u8];
 
@@ -26,7 +26,7 @@ pub struct Tagged {
 }
 
 impl Tagged {
-    pub fn serialize_raw(w: &mut TdfSerializer, tag: &[u8], value_type: TdfType) {
+    pub fn serialize_raw<S: TdfSerializer>(w: &mut S, tag: &[u8], value_type: TdfType) {
         let mut output: [u8; 4] = [0, 0, 0, value_type as u8];
         let length: usize = tag.len();
         if length > 0 {
@@ -169,7 +169,7 @@ impl TdfDeserializeOwned for TdfType {
 }
 
 impl TdfSerializeOwned for TdfType {
-    fn serialize_owned(self, w: &mut TdfSerializer) {
+    fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
         let value = self as u8;
         w.write_byte(value);
     }
