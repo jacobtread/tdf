@@ -1,6 +1,11 @@
 //! Implementation for [`Tag`]s and [`TdfType`]s
 
-use crate::{codec::TdfDeserializeOwned, error::DecodeResult, reader::TdfDeserializer};
+use crate::{
+    codec::{TdfDeserializeOwned, TdfSerializeOwned},
+    error::DecodeResult,
+    reader::TdfDeserializer,
+    writer::TdfSerializer,
+};
 
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};
@@ -12,6 +17,34 @@ pub struct Tagged {
     pub tag: Tag,
     /// The Tdf type after this tag
     pub ty: TdfType,
+}
+
+impl Tagged {
+    pub fn serialize_raw(w: &mut TdfSerializer, tag: &[u8], value_type: TdfType) {
+        let mut output: [u8; 4] = [0, 0, 0, value_type as u8];
+        let length: usize = tag.len();
+        if length > 0 {
+            output[0] |= (tag[0] & 0x40) << 1;
+            output[0] |= (tag[0] & 0x10) << 2;
+            output[0] |= (tag[0] & 0x0F) << 2;
+        }
+        if length > 1 {
+            output[0] |= (tag[1] & 0x40) >> 5;
+            output[0] |= (tag[1] & 0x10) >> 4;
+            output[1] |= (tag[1] & 0x0F) << 4;
+        }
+        if length > 2 {
+            output[1] |= (tag[2] & 0x40) >> 3;
+            output[1] |= (tag[2] & 0x10) >> 2;
+            output[1] |= (tag[2] & 0x0C) >> 2;
+            output[2] |= (tag[2] & 0x03) << 6;
+        }
+        if length > 3 {
+            output[2] |= (tag[3] & 0x40) >> 1;
+            output[2] |= tag[3] & 0x1F;
+        }
+        w.write_slice(&output);
+    }
 }
 
 impl TdfDeserializeOwned for Tagged {
@@ -126,5 +159,12 @@ impl TdfDeserializeOwned for TdfType {
     fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
         let value = r.read_byte()?;
         TdfType::try_from(value)
+    }
+}
+
+impl TdfSerializeOwned for TdfType {
+    fn serialize_owned(self, w: &mut TdfSerializer) {
+        let value = self as u8;
+        w.write_byte(value);
     }
 }

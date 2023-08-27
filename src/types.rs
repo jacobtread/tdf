@@ -336,6 +336,10 @@ pub mod string {
 
     // str slice types
 
+    pub fn write_empty_str(w: &mut TdfSerializer) {
+        w.write_slice(&[1, 0]);
+    }
+
     impl<'de> TdfDeserialize<'de> for &'de str {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let bytes: &'de [u8] = Blob::deserialize_raw(r)?;
@@ -512,7 +516,7 @@ pub mod list {
         V: TdfSerialize + TdfTyped,
     {
         fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_type(V::TYPE);
+            V::TYPE.serialize_owned(w);
             self.len().serialize_owned(w);
             self.iter().for_each(|value| value.serialize(w));
         }
@@ -534,7 +538,7 @@ pub mod map {
     };
 
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
         tag::TdfType,
@@ -855,6 +859,17 @@ pub mod map {
         Ok((key_type, value_type, length))
     }
 
+    pub fn serialize_map_header(
+        w: &mut TdfSerializer,
+        key_type: TdfType,
+        value_type: TdfType,
+        length: usize,
+    ) {
+        key_type.serialize_owned(w);
+        value_type.serialize_owned(w);
+        length.serialize_owned(w);
+    }
+
     pub fn skip_map(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let (key_ty, value_ty, length) = deserialize_map_header(r)?;
         for _ in 0..length {
@@ -900,12 +915,12 @@ pub mod map {
         K: TdfSerialize + TdfTyped + Ord,
         V: TdfSerialize + TdfTyped,
     {
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_map_header(K::TYPE, V::TYPE, self.len());
+        fn serialize(&self, w: &mut TdfSerializer) {
+            serialize_map_header(w, K::TYPE, V::TYPE, self.len());
 
             self.data.iter().for_each(|(key, value)| {
-                key.serialize(output);
-                value.serialize(output);
+                key.serialize(w);
+                value.serialize(w);
             });
         }
     }
@@ -1010,14 +1025,14 @@ pub mod tagged_union {
     where
         Value: TdfSerialize + TdfTyped,
     {
-        fn serialize(&self, output: &mut TdfSerializer) {
+        fn serialize(&self, w: &mut TdfSerializer) {
             match self {
                 TaggedUnion::Set { key, tag, value } => {
-                    output.write_byte(*key);
-                    output.tag(&tag.0, Value::TYPE);
-                    value.serialize(output);
+                    w.write_byte(*key);
+                    Tagged::serialize_raw(w, &tag.0, Value::TYPE);
+                    value.serialize(w);
                 }
-                TaggedUnion::Unset => output.write_byte(Self::UNSET_KEY),
+                TaggedUnion::Unset => w.write_byte(Self::UNSET_KEY),
             }
         }
     }
