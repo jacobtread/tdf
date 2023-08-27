@@ -137,18 +137,18 @@ pub mod var_int {
     }
 
     impl TdfDeserializeOwned for i16 {
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let value = reader.read_u16()?;
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let value = u16::deserialize_owned(r)?;
             Ok(value as i16)
         }
     }
 
     // VarInt i16
 
-    impl TdfSerialize for i16 {
+    impl TdfSerializeOwned for i16 {
         #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u16(*self as u16)
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            (self as u16).serialize_owned(w);
         }
     }
 
@@ -177,16 +177,16 @@ pub mod var_int {
     // VarInt i32
 
     impl TdfDeserializeOwned for i32 {
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let value = reader.read_u32()?;
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let value = u32::deserialize_owned(r)?;
             Ok(value as i32)
         }
     }
 
-    impl TdfSerialize for i32 {
+    impl TdfSerializeOwned for i32 {
         #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u32(*self as u32)
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            (self as u32).serialize_owned(w);
         }
     }
 
@@ -215,16 +215,15 @@ pub mod var_int {
     // VarInt i64
 
     impl TdfDeserializeOwned for i64 {
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let value = reader.read_u64()?;
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let value = u64::deserialize_owned(r)?;
             Ok(value as i64)
         }
     }
 
-    impl TdfSerialize for i64 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u64(*self as u64)
+    impl TdfSerializeOwned for i64 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            (self as u64).serialize_owned(w);
         }
     }
 
@@ -251,18 +250,17 @@ pub mod var_int {
     }
 
     impl TdfDeserializeOwned for isize {
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let value = reader.read_usize()?;
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let value = usize::deserialize_owned(r)?;
             Ok(value as isize)
         }
     }
 
     // VarInt isize
 
-    impl TdfSerialize for isize {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_usize(*self as usize)
+    impl TdfSerializeOwned for isize {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            (self as usize).serialize_owned(w);
         }
     }
 
@@ -411,7 +409,7 @@ pub mod blob {
 
 pub mod list {
     use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -422,14 +420,14 @@ pub mod list {
     where
         C: TdfDeserialize<'de> + TdfTyped,
     {
-        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            reader.expect_type(C::TYPE)?;
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+            r.expect_type(C::TYPE)?;
 
-            let length = reader.read_usize()?;
+            let length = usize::deserialize_owned(r)?;
             let mut values = Vec::with_capacity(length);
 
             for _ in 0..length {
-                values.push(C::deserialize(reader)?);
+                values.push(C::deserialize(r)?);
             }
             Ok(values)
         }
@@ -921,7 +919,7 @@ pub mod tagged_union {
 
 pub mod var_int_list {
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -959,11 +957,11 @@ pub mod var_int_list {
     }
 
     impl TdfDeserializeOwned for VarIntList {
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let length = reader.read_usize()?;
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let length = usize::deserialize_owned(r)?;
             let mut out = Vec::with_capacity(length);
             for _ in 0..length {
-                out.push(reader.read_u64()?);
+                out.push(u64::deserialize_owned(r)?);
             }
             Ok(VarIntList(out))
         }
@@ -972,7 +970,10 @@ pub mod var_int_list {
     impl TdfSerialize for VarIntList {
         fn serialize(&self, w: &mut TdfSerializer) {
             w.write_usize(self.0.len());
-            self.0.iter().copied().for_each(|value| w.write_u64(value));
+            self.0
+                .iter()
+                .copied()
+                .for_each(|value| value.serialize_owned(w));
         }
     }
 
@@ -1010,8 +1011,8 @@ pub mod object_type {
 
     impl TdfDeserializeOwned for ObjectType {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let component = r.read_u16()?;
-            let ty = r.read_u16()?;
+            let component = u16::deserialize_owned(r)?;
+            let ty = u16::deserialize_owned(r)?;
             Ok(Self { component, ty })
         }
     }
@@ -1101,7 +1102,7 @@ pub mod object_id {
     impl TdfDeserializeOwned for ObjectId {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             let ty = ObjectType::deserialize_owned(r)?;
-            let id = r.read_u64()?;
+            let id = u64::deserialize_owned(r)?;
             Ok(Self { ty, id })
         }
     }

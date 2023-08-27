@@ -4,7 +4,7 @@
 use crate::types::{TaggedUnion, TdfMap};
 
 use super::{
-    codec::{TdfDeserialize, TdfTyped},
+    codec::{TdfDeserialize, TdfDeserializeOwned, TdfTyped},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
 };
@@ -20,29 +20,6 @@ pub struct TdfDeserializer<'a> {
     /// The cursor position on the buffer. The cursor should not be set
     /// to any arbitry values should only be set to previously know values
     pub cursor: usize,
-}
-
-/// Macro for implementing VarInt decoding for a specific number type
-/// to prevent allocating for a u64 for every other number type
-macro_rules! impl_decode_var {
-    ($ty:ty, $reader:ident) => {{
-        let first: u8 = $reader.read_byte()?;
-        let mut result: $ty = (first & 63) as $ty;
-        if first < 128 {
-            return Ok(result);
-        }
-        let mut shift: u32 = 6;
-        let mut byte: u8;
-        loop {
-            byte = $reader.read_byte()?;
-            result |= ((byte & 127) as $ty).wrapping_shl(shift);
-            if byte < 128 {
-                break;
-            }
-            shift += 7;
-        }
-        Ok(result)
-    }};
 }
 
 impl<'de> TdfDeserializer<'de> {
@@ -124,38 +101,10 @@ impl<'de> TdfDeserializer<'de> {
         self.cursor >= self.buffer.len()
     }
 
-    /// Decodes a u16 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_u16(&mut self) -> DecodeResult<u16> {
-        impl_decode_var!(u16, self)
-    }
-
-    /// Decodes a u32 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_u32(&mut self) -> DecodeResult<u32> {
-        impl_decode_var!(u32, self)
-    }
-
-    /// Decodes a u64 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_u64(&mut self) -> DecodeResult<u64> {
-        impl_decode_var!(u64, self)
-    }
-
-    /// Decodes a u64 value using hte VarInt encoding. This uses
-    /// the impl_decode_var macro so its implementation is the
-    /// same as others
-    pub fn read_usize(&mut self) -> DecodeResult<usize> {
-        impl_decode_var!(usize, self)
-    }
-
     /// Reads a blob from the buffer. The blob is a slice prefixed
     /// by a length value
     pub fn read_blob(&mut self) -> DecodeResult<&'de [u8]> {
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::deserialize_owned(self)?;
         let bytes: &[u8] = self.read_slice(length)?;
         Ok(bytes)
     }
@@ -216,7 +165,7 @@ impl<'de> TdfDeserializer<'de> {
                 actual: value_type,
             });
         }
-        self.read_usize()
+        usize::deserialize_owned(self)
     }
 
     /// Reads the contents of the map for the provided key value types
@@ -391,7 +340,7 @@ impl<'de> TdfDeserializer<'de> {
 
     /// Skips the next string value
     pub fn skip_blob(&mut self) -> DecodeResult<()> {
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::deserialize_owned(self)?;
         self.expect_length(length)?;
         self.cursor += length;
         Ok(())
@@ -433,7 +382,7 @@ impl<'de> TdfDeserializer<'de> {
     /// Skips a list of items
     pub fn skip_list(&mut self) -> DecodeResult<()> {
         let ty: TdfType = self.read_type()?;
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::deserialize_owned(self)?;
         for _ in 0..length {
             self.skip_type(&ty)?;
         }
@@ -444,7 +393,7 @@ impl<'de> TdfDeserializer<'de> {
     pub fn skip_map(&mut self) -> DecodeResult<()> {
         let key_ty: TdfType = self.read_type()?;
         let value_ty: TdfType = self.read_type()?;
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::deserialize_owned(self)?;
         for _ in 0..length {
             self.skip_type(&key_ty)?;
             self.skip_type(&value_ty)?;
@@ -463,9 +412,9 @@ impl<'de> TdfDeserializer<'de> {
 
     /// Skips a var int list
     pub fn skip_var_int_list(&mut self) -> DecodeResult<()> {
-        let length: usize = self.read_usize()?;
+        let length: usize = usize::deserialize_owned(self)?;
         for _ in 0..length {
-            self.skip_var_int();
+            self.skip_var_int()?;
         }
         Ok(())
     }
@@ -561,7 +510,7 @@ impl<'de> TdfDeserializer<'de> {
     ) -> DecodeResult<()> {
         match ty {
             TdfType::VarInt => {
-                let value = self.read_usize()?;
+                let value = usize::deserialize_owned(self)?;
                 out.push_str(&value.to_string());
             }
             TdfType::String => {
@@ -605,7 +554,7 @@ impl<'de> TdfDeserializer<'de> {
             }
             TdfType::List => {
                 let value_type: TdfType = self.read_type()?;
-                let length: usize = self.read_usize()?;
+                let length: usize = usize::deserialize_owned(self)?;
                 let expand = matches!(value_type, TdfType::Map | TdfType::Group);
                 out.push('[');
                 if expand {
@@ -632,7 +581,7 @@ impl<'de> TdfDeserializer<'de> {
             TdfType::Map => {
                 let key_type: TdfType = self.read_type()?;
                 let value_type: TdfType = self.read_type()?;
-                let length: usize = self.read_usize()?;
+                let length: usize = usize::deserialize_owned(self)?;
                 out.push_str(&format!(
                     "Map<{:?}, {:?}, {}>",
                     key_type, value_type, length
@@ -675,10 +624,10 @@ impl<'de> TdfDeserializer<'de> {
                 }
             }
             TdfType::VarIntList => {
-                let length: usize = self.read_usize()?;
+                let length: usize = usize::deserialize_owned(self)?;
                 out.push_str("VarList [");
                 for i in 0..length {
-                    let value = self.read_usize()?;
+                    let value = usize::deserialize_owned(self)?;
                     out.push_str(&value.to_string());
                     if i < length - 1 {
                         out.push_str(", ");
@@ -687,15 +636,15 @@ impl<'de> TdfDeserializer<'de> {
                 out.push(']');
             }
             TdfType::ObjectType => {
-                let a = self.read_usize()?;
-                let b = self.read_usize()?;
+                let a = usize::deserialize_owned(self)?;
+                let b = usize::deserialize_owned(self)?;
 
                 out.push_str(&format!("ObjectType({}, {})", a, b))
             }
             TdfType::ObjectId => {
-                let a = self.read_usize()?;
-                let b = self.read_usize()?;
-                let c = self.read_usize()?;
+                let a = usize::deserialize_owned(self)?;
+                let b = usize::deserialize_owned(self)?;
+                let c = usize::deserialize_owned(self)?;
 
                 out.push_str(&format!("ObjectId({}, {}, {})", a, b, c))
             }
@@ -728,7 +677,7 @@ impl<'de> TdfDeserializer<'de> {
                 actual: list_type,
             });
         }
-        let count = self.read_usize()?;
+        let count = usize::deserialize_owned(self)?;
         Ok(count)
     }
 
@@ -764,7 +713,7 @@ impl<'de> TdfDeserializer<'de> {
             });
         }
 
-        let count = self.read_usize()?;
+        let count = usize::deserialize_owned(self)?;
         Ok(count)
     }
 }
