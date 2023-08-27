@@ -180,15 +180,14 @@ where
 /// Key value for unions that are unset
 pub const UNION_UNSET: u8 = 0x7F;
 
-/// Structure for maps used in the protocol. These maps have a special
-/// order that is usually required and they retain the order of insertion
-/// because it uses two vecs as the underlying structure
+#[derive(Clone)]
 pub struct TdfMap<K, V> {
     /// The entries stored in this map
     entries: Vec<MapEntry<K, V>>,
 }
 
 /// Entry within a TdfMap storing a key value pair
+#[derive(Debug, Clone)]
 struct MapEntry<K, V> {
     /// Entry key
     key: K,
@@ -196,35 +195,10 @@ struct MapEntry<K, V> {
     value: V,
 }
 
-impl<K, V> Clone for MapEntry<K, V>
-where
-    K: Clone,
-    V: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            key: self.key.clone(),
-            value: self.value.clone(),
-        }
-    }
-}
-
 impl<K, V> Default for TdfMap<K, V> {
     fn default() -> Self {
         Self {
             entries: Vec::new(),
-        }
-    }
-}
-
-impl<K, V> Clone for TdfMap<K, V>
-where
-    K: Clone,
-    V: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            entries: self.entries.clone(),
         }
     }
 }
