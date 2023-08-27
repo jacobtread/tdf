@@ -11,7 +11,7 @@ pub use var_int_list::VarIntList;
 
 pub mod var_int {
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
+        codec::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -885,10 +885,10 @@ pub mod map {
 
 pub mod tagged_union {
     use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
-        tag::{Tag, TdfType},
+        tag::{Tag, Tagged, TdfType},
         writer::TdfSerializer,
     };
 
@@ -942,12 +942,12 @@ pub mod tagged_union {
     where
         Value: TdfDeserialize<'de> + TdfTyped,
     {
-        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            let key = reader.read_byte()?;
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+            let key = r.read_byte()?;
             if key == Self::UNSET_KEY {
                 return Ok(TaggedUnion::Unset);
             }
-            let tag = reader.read_tag()?;
+            let tag = Tagged::deserialize_owned(r)?;
             let expected_type = Value::TYPE;
             let actual_type = tag.ty;
             if actual_type != expected_type {
@@ -956,7 +956,7 @@ pub mod tagged_union {
                     actual: actual_type,
                 });
             }
-            let value = Value::deserialize(reader)?;
+            let value = Value::deserialize(r)?;
 
             Ok(TaggedUnion::Set {
                 key,

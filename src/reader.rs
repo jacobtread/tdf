@@ -94,7 +94,7 @@ impl<'de> TdfDeserializer<'de> {
     pub fn until_tag(&mut self, tag: &[u8], ty: TdfType) -> DecodeResult<()> {
         let tag = Tag::from(tag);
         loop {
-            let next_tag = match self.read_tag() {
+            let next_tag = match Tagged::deserialize_owned(self) {
                 Ok(value) => value,
                 Err(DecodeError::UnexpectedEof { .. }) => {
                     return Err(DecodeError::MissingTag { tag, ty })
@@ -129,7 +129,7 @@ impl<'de> TdfDeserializer<'de> {
         let tag = Tag::from(tag);
         let start = self.cursor;
 
-        while let Ok(next_tag) = self.read_tag() {
+        while let Ok(next_tag) = Tagged::deserialize_owned(self) {
             if next_tag.tag != tag {
                 if self.skip_type(&next_tag.ty).is_err() {
                     break;
@@ -194,34 +194,6 @@ impl<'de> TdfDeserializer<'de> {
         } else {
             Ok(())
         }
-    }
-
-    /// Reads a tag from the underlying buffer
-    pub fn read_tag(&mut self) -> DecodeResult<Tagged> {
-        let input: [u8; 4] = self.read_bytes()?;
-        let ty: TdfType = TdfType::try_from(input[3])?;
-        let mut output: [u8; 4] = [0, 0, 0, 0];
-
-        output[0] |= (input[0] & 0x80) >> 1;
-        output[0] |= (input[0] & 0x40) >> 2;
-        output[0] |= (input[0] & 0x30) >> 2;
-        output[0] |= (input[0] & 0x0C) >> 2;
-
-        output[1] |= (input[0] & 0x02) << 5;
-        output[1] |= (input[0] & 0x01) << 4;
-        output[1] |= (input[1] & 0xF0) >> 4;
-
-        output[2] |= (input[1] & 0x08) << 3;
-        output[2] |= (input[1] & 0x04) << 2;
-        output[2] |= (input[1] & 0x03) << 2;
-        output[2] |= (input[2] & 0xC0) >> 6;
-
-        output[3] |= (input[2] & 0x20) << 1;
-        output[3] |= input[2] & 0x1F;
-
-        let tag = Tag(output);
-
-        Ok(Tagged { tag, ty })
     }
 
     /// Skips the 4 bytes required for a 32 bit float value
@@ -312,7 +284,7 @@ impl<'de> TdfDeserializer<'de> {
 
     /// Skips the next tag value
     pub fn skip(&mut self) -> DecodeResult<()> {
-        let tag = self.read_tag()?;
+        let tag = Tagged::deserialize_owned(self)?;
         self.skip_type(&tag.ty)
     }
 
@@ -372,7 +344,7 @@ impl<'de> TdfDeserializer<'de> {
     /// `out`    The string output to append to
     /// `indent` The current indent level
     pub fn stringify_tag(&mut self, out: &mut String, indent: usize) -> DecodeResult<()> {
-        let tag = self.read_tag()?;
+        let tag = Tagged::deserialize_owned(self)?;
         out.push_str(&"  ".repeat(indent));
         out.push_str(&format!("\"{}\": ", &tag.tag));
         match self.stringify_type(out, indent, &tag.ty) {
@@ -503,7 +475,7 @@ impl<'de> TdfDeserializer<'de> {
                 if ty == TaggedUnion::<()>::UNSET_KEY {
                     out.push_str("Union(Unset)")
                 } else {
-                    let tag = self.read_tag()?;
+                    let tag = Tagged::deserialize_owned(self)?;
                     out.push_str(&format!("Union(\"{}\", {}, ", &tag.tag, ty));
                     self.stringify_type(out, indent + 1, &tag.ty)?;
                     out.push(')')
