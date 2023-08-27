@@ -1,19 +1,10 @@
 //! Types implementation for custom types used while encoding values
 //! with Blaze packets
 
-use crate::codec::TdfDeserializeOwned;
-
-use super::{
-    codec::{TdfDeserialize, TdfSerialize, TdfTyped},
-    error::{DecodeError, DecodeResult},
-    reader::TdfReader,
-    tag::TdfType,
-    writer::TdfSerializer,
-};
-
-use std::fmt::Debug;
-
+pub use blob::Blob;
 pub use map::TdfMap;
+pub use object_id::ObjectId;
+pub use object_type::ObjectType;
 pub use tagged_union::TaggedUnion;
 pub use var_int_list::VarIntList;
 
@@ -879,7 +870,7 @@ mod blob {
     }
 }
 
-mod list {
+pub mod list {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::DecodeResult,
@@ -938,136 +929,154 @@ mod list {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ObjectType {
-    /// Component for the object type
-    pub component: u16,
-    /// The object type
-    pub ty: u16,
-}
+pub mod object_type {
+    use crate::{
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
 
-impl TdfSerialize for ObjectType {
-    fn serialize(&self, w: &mut TdfSerializer) {
-        w.write_u16(self.component);
-        w.write_u16(self.ty);
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct ObjectType {
+        /// Component for the object type
+        pub component: u16,
+        /// The object type
+        pub ty: u16,
+    }
+
+    impl TdfSerialize for ObjectType {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_u16(self.component);
+            w.write_u16(self.ty);
+        }
+    }
+
+    impl TdfDeserializeOwned for ObjectType {
+        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+            let component = r.read_u16()?;
+            let ty = r.read_u16()?;
+            Ok(Self { component, ty })
+        }
+    }
+
+    impl TdfTyped for ObjectType {
+        const TYPE: TdfType = TdfType::ObjectType;
+    }
+
+    #[cfg(test)]
+    mod test {
+        use crate::{
+            codec::{TdfDeserialize, TdfSerialize},
+            reader::TdfReader,
+            writer::TdfSerializer,
+        };
+
+        use super::ObjectType;
+
+        /// Tests that object types can be correctly serialized
+        #[test]
+        fn test_serialize_object_id() {
+            let mut w = TdfSerializer::default();
+            let object_type = ObjectType {
+                component: 30722,
+                ty: 1,
+            };
+            object_type.serialize(&mut w);
+
+            // Check deserialize works correctly
+            let mut r = TdfReader::new(&w.buffer);
+            let value = ObjectType::deserialize(&mut r).unwrap();
+            assert_eq!(object_type, value);
+
+            // Check serialized bytes match expected
+            let expected = &[
+                130, 224, 3, // Component
+                1, // Type
+            ];
+
+            assert_eq!(&r.buffer, expected)
+        }
     }
 }
 
-impl TdfDeserializeOwned for ObjectType {
-    fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
-        let component = r.read_u16()?;
-        let ty = r.read_u16()?;
-        Ok(Self { component, ty })
+pub mod object_id {
+    use crate::{
+        codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
+
+    use super::object_type::ObjectType;
+
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct ObjectId {
+        /// The object type
+        pub ty: ObjectType,
+        /// The object ID
+        pub id: u64,
     }
-}
 
-impl TdfTyped for ObjectType {
-    const TYPE: TdfType = TdfType::ObjectType;
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ObjectId {
-    /// The object type
-    pub ty: ObjectType,
-    /// The object ID
-    pub id: u64,
-}
-
-impl TdfSerialize for ObjectId {
-    fn serialize(&self, w: &mut TdfSerializer) {
-        self.ty.serialize(w);
-        w.write_u64(self.id);
+    impl TdfSerialize for ObjectId {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            self.ty.serialize(w);
+            w.write_u64(self.id);
+        }
     }
-}
 
-impl TdfDeserializeOwned for ObjectId {
-    fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
-        let ty = ObjectType::deserialize_owned(r)?;
-        let id = r.read_u64()?;
-        Ok(Self { ty, id })
+    impl TdfDeserializeOwned for ObjectId {
+        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+            let ty = ObjectType::deserialize_owned(r)?;
+            let id = r.read_u64()?;
+            Ok(Self { ty, id })
+        }
     }
-}
 
-impl TdfTyped for ObjectId {
-    const TYPE: TdfType = TdfType::ObjectId;
-}
+    impl TdfTyped for ObjectId {
+        const TYPE: TdfType = TdfType::ObjectId;
+    }
 
-#[cfg(test)]
-mod test {
+    #[cfg(test)]
+    mod test {
+        use crate::{
+            codec::{TdfDeserialize, TdfSerialize},
+            reader::TdfReader,
+            types::object_type::ObjectType,
+            writer::TdfSerializer,
+        };
 
-    use std::time::Instant;
+        use super::ObjectId;
 
-    use crate::types::TdfMap;
+        /// Tests that object IDs can be correctly serialized
+        #[test]
+        fn test_serialize_object_id() {
+            let mut w = TdfSerializer::default();
+            let object_id = ObjectId {
+                ty: ObjectType {
+                    component: 30722,
+                    ty: 1,
+                },
+                id: 0x0000012,
+            };
+            object_id.serialize(&mut w);
 
-    // /// Tests ordering a map
-    // #[test]
-    // fn test_map_ord() {
-    //     let mut map = TdfMap::<String, String>::new();
+            // Check deserialize works correctly
+            let mut r = TdfReader::new(&w.buffer);
+            let value = ObjectId::deserialize(&mut r).unwrap();
+            assert_eq!(object_id.ty, value.ty);
+            assert_eq!(object_id.id, value.id);
 
-    //     // Expected order:
-    //     // TdfMap {
-    //     //   "key1": "ABC"
-    //     //   "key11": "ABC"
-    //     //   "key17": "ABC"
-    //     //   "key2": "ABC"
-    //     //   "key24": "ABC"
-    //     //   "key4": "ABC"
-    //     // }
+            // Check serialized bytes match expected
+            let expected = &[
+                130, 224, 3,  // Component
+                1,  // Type
+                18, // ID
+            ];
 
-    //     let i = Instant::now();
-    //     // Input order
-    //     map.insert("key1", "ABC");
-    //     map.insert("key2", "ABC");
-    //     map.insert("key4", "ABC");
-    //     map.insert("key24", "ABC");
-    //     map.insert("key11", "ABC");
-    //     map.insert("key17", "ABC");
-
-    //     map.order();
-    //     let el = i.elapsed();
-    //     println!("Full order time: {:?}", el);
-
-    //     assert_eq!(map.entries[0].key, "key1");
-    //     assert_eq!(map.entries[1].key, "key11");
-    //     assert_eq!(map.entries[2].key, "key17");
-    //     assert_eq!(map.entries[3].key, "key2");
-    //     assert_eq!(map.entries[4].key, "key24");
-    //     assert_eq!(map.entries[5].key, "key4");
-    // }
-
-    // /// Tests extending an existing map
-    // #[test]
-    // fn test_map_extend() {
-    //     let mut mapa = TdfMap::<String, String>::new();
-
-    //     mapa.insert("key1", "ABC");
-    //     mapa.insert("key2", "ABC");
-    //     mapa.insert("key4", "ABC");
-    //     mapa.insert("key24", "ABC");
-    //     mapa.insert("key11", "ABC");
-    //     mapa.insert("key17", "ABC");
-
-    //     let mut mapb = TdfMap::<String, String>::new();
-
-    //     mapb.insert("key1", "DDD");
-    //     mapb.insert("key2", "ABC");
-    //     mapb.insert("key4", "DDD");
-    //     mapb.insert("abc", "ABC");
-
-    //     mapa.extend(mapb);
-    //     println!("{mapa:?}")
-    // }
-
-    // /// Tests inserting into a map
-    // #[test]
-    // fn test_map_insert() {
-    //     let mut map = TdfMap::<String, String>::new();
-    //     map.insert("Test", "Abc");
-
-    //     let value = map.get("Test");
-
-    //     assert_eq!(value.unwrap(), "Abc");
-
-    //     println!("{value:?}")
-    // }
+            assert_eq!(&r.buffer, expected)
+        }
+    }
 }
