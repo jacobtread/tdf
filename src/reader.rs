@@ -14,7 +14,7 @@ use std::borrow::Cow;
 /// underlying slice using a cursor and with a position that can
 /// be saved using the marker. Provides functions for reading
 /// certain data types in the Blaze format
-pub struct TdfReader<'a> {
+pub struct TdfDeserializer<'a> {
     /// The underlying buffer to read from
     pub buffer: &'a [u8],
     /// The cursor position on the buffer. The cursor should not be set
@@ -45,7 +45,7 @@ macro_rules! impl_decode_var {
     }};
 }
 
-impl<'de> TdfReader<'de> {
+impl<'de> TdfDeserializer<'de> {
     /// Creates a new reader over the provided slice of bytes with
     /// the default cursor position at zero
     pub fn new(buffer: &'de [u8]) -> Self {
@@ -799,14 +799,14 @@ impl<'de> TdfReader<'de> {
 /// Majority of reading tests are merged into the writing tests
 #[cfg(test)]
 mod test {
-    use super::TdfReader;
+    use super::TdfDeserializer;
 
     /// Tests reading a byte from the reader
     #[test]
     fn test_read_byte() {
         for value in 0..255 {
             let buffer = &[value];
-            let mut reader = TdfReader::new(buffer);
+            let mut reader = TdfDeserializer::new(buffer);
             let read_value = reader.read_byte().unwrap();
             assert_eq!(value, read_value);
         }

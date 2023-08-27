@@ -452,7 +452,7 @@ mod test {
     use super::TdfSerializer;
     use crate::{
         codec::{TdfSerialize, TdfSerializeOwned},
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         types::TaggedUnion,
     };
@@ -577,7 +577,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in u8::MIN..u8::MAX {
             writer.tag_u8(b"TEST", value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u8 = reader.tag(b"TEST").expect("Failed to decode tag u8 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -592,7 +592,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in u16::MIN..u16::MAX {
             writer.tag_u16(b"TEST", value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u16 = reader.tag(b"TEST").expect("Failed to decode tag u16 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -607,7 +607,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in (u32::MAX - 65535)..u32::MAX {
             writer.tag_u32(b"TEST", value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u32 = reader.tag(b"TEST").expect("Failed to decode tag u32 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -622,7 +622,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in (u64::MAX - 65535)..u64::MAX {
             writer.tag_u64(b"TEST", value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u64 = reader.tag(b"TEST").expect("Failed to decode tag u64 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -637,7 +637,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in (usize::MAX - 65535)..usize::MAX {
             writer.tag_usize(b"TEST", value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: usize = reader
                 .tag(b"TEST")
                 .expect("Failed to decode tag usize value");
@@ -684,7 +684,7 @@ mod test {
         assert_eq!(&writer.buffer[4..4 + length_bytes.len()], &length_bytes);
         assert_eq!(&writer.buffer[4 + length_bytes.len()..], TEXT_BYTES);
 
-        let mut reader = TdfReader::new(&writer.buffer);
+        let mut reader = TdfDeserializer::new(&writer.buffer);
         let value: String = reader.tag(b"TEST").unwrap();
 
         assert_eq!(value, TEXT)
@@ -833,7 +833,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in u8::MIN..u8::MAX {
             writer.write_u8(value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u8 = reader.read_u8().expect("Failed to decode tag u8 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -848,7 +848,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in u16::MIN..u16::MAX {
             writer.write_u16(value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u16 = reader.read_u16().expect("Failed to decode tag u16 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -863,7 +863,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in (u32::MAX - 65535)..u32::MAX {
             writer.write_u32(value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u32 = reader.read_u32().expect("Failed to decode tag u32 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -878,7 +878,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in (u64::MAX - 65535)..u64::MAX {
             writer.write_u64(value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: u64 = reader.read_u64().expect("Failed to decode tag u64 value");
             assert_eq!(value, decoded);
             writer.clear();
@@ -893,7 +893,7 @@ mod test {
         let mut writer = TdfSerializer::default();
         for value in (usize::MAX - 65535)..usize::MAX {
             writer.write_usize(value);
-            let mut reader = TdfReader::new(&writer.buffer);
+            let mut reader = TdfDeserializer::new(&writer.buffer);
             let decoded: usize = reader
                 .read_usize()
                 .expect("Failed to decode tag usize value");
@@ -933,7 +933,7 @@ mod test {
         assert_eq!(&writer.buffer[..length_bytes.len()], &length_bytes);
         assert_eq!(&writer.buffer[length_bytes.len()..], TEXT_BYTES);
 
-        let mut reader = TdfReader::new(&writer.buffer);
+        let mut reader = TdfDeserializer::new(&writer.buffer);
         let value: String = reader.read_string().unwrap();
 
         assert_eq!(value, TEXT)

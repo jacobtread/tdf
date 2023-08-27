@@ -13,21 +13,21 @@ pub mod var_int {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
 
     impl TdfSerialize for bool {
         #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_bool(*self)
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_bool(*self)
         }
     }
 
     impl TdfDeserializeOwned for bool {
         #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             reader.read_bool()
         }
     }
@@ -40,7 +40,7 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for u8 {
         #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             reader.read_u8()
         }
     }
@@ -59,7 +59,7 @@ pub mod var_int {
     // VarInt i8
 
     impl TdfDeserializeOwned for i8 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             let value = reader.read_u8()?;
             Ok(value as i8)
         }
@@ -80,7 +80,7 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for u16 {
         #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             reader.read_u16()
         }
     }
@@ -97,7 +97,7 @@ pub mod var_int {
     }
 
     impl TdfDeserializeOwned for i16 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             let value = reader.read_u16()?;
             Ok(value as i16)
         }
@@ -118,7 +118,7 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for u32 {
         #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             reader.read_u32()
         }
     }
@@ -139,7 +139,7 @@ pub mod var_int {
     // VarInt i32
 
     impl TdfDeserializeOwned for i32 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             let value = reader.read_u32()?;
             Ok(value as i32)
         }
@@ -160,7 +160,7 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for u64 {
         #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             reader.read_u64()
         }
     }
@@ -179,7 +179,7 @@ pub mod var_int {
     // VarInt i64
 
     impl TdfDeserializeOwned for i64 {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             let value = reader.read_u64()?;
             Ok(value as i64)
         }
@@ -200,7 +200,7 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for usize {
         #[inline]
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             reader.read_usize()
         }
     }
@@ -217,7 +217,7 @@ pub mod var_int {
     }
 
     impl TdfDeserializeOwned for isize {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             let value = reader.read_usize()?;
             Ok(value as isize)
         }
@@ -241,7 +241,7 @@ pub mod string {
     use crate::{
         codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -250,7 +250,7 @@ pub mod string {
 
     impl<'de> TdfDeserialize<'de> for &'de str {
         #[inline]
-        fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             r.read_str()
         }
     }
@@ -270,7 +270,7 @@ pub mod string {
 
     impl TdfDeserializeOwned for String {
         #[inline]
-        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             r.read_string()
         }
     }
@@ -291,7 +291,7 @@ pub mod blob {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -312,7 +312,7 @@ pub mod blob {
     }
 
     impl<'de> TdfDeserialize<'de> for Blob<'de> {
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let bytes = reader.read_blob()?;
             Ok(Blob(bytes))
         }
@@ -334,7 +334,7 @@ pub mod list {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -343,7 +343,7 @@ pub mod list {
     where
         C: TdfDeserialize<'de> + TdfTyped,
     {
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             reader.expect_type(C::TYPE)?;
 
             let length = reader.read_usize()?;
@@ -399,7 +399,7 @@ pub mod map {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -715,7 +715,7 @@ pub mod map {
         V: TdfDeserialize<'de> + TdfTyped,
     {
         #[inline]
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             reader.read_map()
         }
     }
@@ -744,7 +744,7 @@ pub mod tagged_union {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::{DecodeError, DecodeResult},
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::{Tag, TdfType},
         writer::TdfSerializer,
     };
@@ -799,7 +799,7 @@ pub mod tagged_union {
     where
         Value: TdfDeserialize<'de> + TdfTyped,
     {
-        fn deserialize(reader: &mut TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let key = reader.read_byte()?;
             if key == Self::UNSET_KEY {
                 return Ok(TaggedUnion::Unset);
@@ -844,7 +844,7 @@ pub mod var_int_list {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -880,7 +880,7 @@ pub mod var_int_list {
     }
 
     impl TdfDeserializeOwned for VarIntList {
-        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
             let length = reader.read_usize()?;
             let mut out = Vec::with_capacity(length);
             for _ in 0..length {
@@ -906,7 +906,7 @@ pub mod object_type {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -930,7 +930,7 @@ pub mod object_type {
     }
 
     impl TdfDeserializeOwned for ObjectType {
-        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             let component = r.read_u16()?;
             let ty = r.read_u16()?;
             Ok(Self { component, ty })
@@ -952,7 +952,7 @@ pub mod object_type {
     mod test {
         use crate::{
             codec::{TdfDeserialize, TdfSerialize},
-            reader::TdfReader,
+            reader::TdfDeserializer,
             writer::TdfSerializer,
         };
 
@@ -969,7 +969,7 @@ pub mod object_type {
             object_type.serialize(&mut w);
 
             // Check deserialize works correctly
-            let mut r = TdfReader::new(&w.buffer);
+            let mut r = TdfDeserializer::new(&w.buffer);
             let value = ObjectType::deserialize(&mut r).unwrap();
             assert_eq!(object_type, value);
 
@@ -989,7 +989,7 @@ pub mod object_id {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
@@ -1020,7 +1020,7 @@ pub mod object_id {
     }
 
     impl TdfDeserializeOwned for ObjectId {
-        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             let ty = ObjectType::deserialize_owned(r)?;
             let id = r.read_u64()?;
             Ok(Self { ty, id })
@@ -1042,7 +1042,7 @@ pub mod object_id {
     mod test {
         use crate::{
             codec::{TdfDeserialize, TdfSerialize},
-            reader::TdfReader,
+            reader::TdfDeserializer,
             types::object_type::ObjectType,
             writer::TdfSerializer,
         };
@@ -1063,7 +1063,7 @@ pub mod object_id {
             object_id.serialize(&mut w);
 
             // Check deserialize works correctly
-            let mut r = TdfReader::new(&w.buffer);
+            let mut r = TdfDeserializer::new(&w.buffer);
             let value = ObjectId::deserialize(&mut r).unwrap();
             assert_eq!(object_id.ty, value.ty);
             assert_eq!(object_id.id, value.id);
@@ -1085,13 +1085,13 @@ pub mod float {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
     };
 
     impl TdfDeserializeOwned for f32 {
-        fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             let bytes: [u8; 4] = r.read_bytes()?;
             Ok(f32::from_be_bytes(bytes))
         }
@@ -1111,7 +1111,7 @@ pub mod float {
     #[cfg(test)]
     mod test {
         use crate::{
-            codec::TdfDeserializeOwned, codec::TdfSerialize, reader::TdfReader,
+            codec::TdfDeserializeOwned, codec::TdfSerialize, reader::TdfDeserializer,
             writer::TdfSerializer,
         };
 
@@ -1132,7 +1132,7 @@ pub mod float {
                 assert_eq!(&w.buffer, expected);
 
                 // Check that the deserialize works correctly
-                let mut r = TdfReader::new(&w.buffer);
+                let mut r = TdfDeserializer::new(&w.buffer);
                 let read_value = f32::deserialize_owned(&mut r).unwrap();
                 assert_eq!(read_value, *value);
 
@@ -1147,7 +1147,7 @@ pub mod u12 {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::DecodeResult,
-        reader::TdfReader,
+        reader::TdfDeserializer,
         tag::TdfType,
     };
 
@@ -1161,7 +1161,7 @@ pub mod u12 {
     }
 
     impl<'de> TdfDeserialize<'de> for U12<'de> {
-        fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self> {
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let data: [u8; 8] = r.read_bytes()?;
             let value: &str = r.read_str()?;
             Ok(Self { data, value })
