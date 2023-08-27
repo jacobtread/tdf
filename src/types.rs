@@ -177,334 +177,347 @@ mod tagged_union {
     }
 }
 
-#[derive(Clone)]
-pub struct TdfMap<K, V> {
-    /// The entries stored in this map
-    entries: Vec<MapEntry<K, V>>,
-}
+mod map {
+    use std::{
+        borrow::Borrow,
+        fmt::Debug,
+        ops::{Bound, Index, IndexMut, RangeBounds},
+    };
 
-/// Entry within a TdfMap storing a key value pair
-#[derive(Debug, Clone)]
-struct MapEntry<K, V> {
-    /// Entry key
-    key: K,
-    /// Entry value
-    value: V,
-}
+    use crate::{
+        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
 
-impl<K, V> Default for TdfMap<K, V> {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
-}
-
-impl<K, V> Debug for TdfMap<K, V>
-where
-    K: Debug,
-    V: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_map().entries(self.iter()).finish()
-    }
-}
-
-impl<K, V> TdfMap<K, V> {
-    /// Constructor implemention just uses the underlying default
-    /// implemenation
-    pub fn new() -> Self {
-        Self::default()
+    /// [TdfMap] is the data structure used for serializing maps in the
+    /// Tdf format. This map implementation uses Rusts nightly
+    /// [SortedMap](https://doc.rust-lang.org/stable/nightly-rustc/rustc_data_structures/sorted_map/struct.SortedMap.html)
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct TdfMap<K, V> {
+        data: Vec<(K, V)>,
     }
 
-    /// Function for creating a new TdfMap where the underlying
-    /// lists have an initial capacity
-    ///
-    /// `capacity` The capacity
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            entries: Vec::with_capacity(capacity),
+    impl<K, V> Default for TdfMap<K, V> {
+        #[inline]
+        fn default() -> TdfMap<K, V> {
+            TdfMap { data: Vec::new() }
         }
     }
 
-    /// Returns the length of the underlying lists
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Returns if the underlying lists are empty
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Creates a new iterator over the underlying items
-    /// in the map
-    pub fn iter(&self) -> MapEntryIter<'_, K, V> {
-        MapEntryIter {
-            inner: self.entries.iter(),
+    impl<K, V> TdfMap<K, V> {
+        #[inline]
+        pub const fn new() -> TdfMap<K, V> {
+            TdfMap { data: Vec::new() }
         }
     }
 
-    /// Returns the key and value stored at the provided index
-    /// will return None if there is nothing at the provided index
-    pub fn index(&self, index: usize) -> Option<(&'_ K, &'_ V)> {
-        let entry = self.entries.get(index)?;
-        Some((&entry.key, &entry.value))
-    }
-
-    /// Inserts a new key value pair into the underlying structure.
-    ///
-    /// This function does NOT maintain order of the entires, use
-    /// `insert_ordered` instead for maintaining the order
-    ///
-    /// `key`   The entry key
-    /// `value` The entry value
-    pub fn insert<A: Into<K>, B: Into<V>>(&mut self, key: A, value: B) {
-        self.entries.push(MapEntry {
-            key: key.into(),
-            value: value.into(),
-        });
-    }
-
-    /// Removes the last key and value returning them or None
-    /// if there are no entries
-    pub fn pop(&mut self) -> Option<(K, V)> {
-        let entry = self.entries.pop()?;
-        Some((entry.key, entry.value))
-    }
-
-    /// Removes all entries from the underlying list
-    pub fn clear(&mut self) {
-        self.entries.clear();
-    }
-}
-
-impl<K, V> TdfMap<K, V>
-where
-    K: PartialOrd + Ord,
-{
-    /// Orders this map based on its keys by ordering keys that
-    /// are greater further up in the map
-    ///
-    /// This function is quite slow compared to using `insert_ordered`
-    /// for all the inserted entries. This is only for if you inserted
-    /// with `insert` instead
-    pub fn order(&mut self) {
-        let entries = &mut self.entries;
-        let length = entries.len();
-        // If empty or 1 item no need to order
-        if length <= 1 {
-            return;
+    impl<K: Ord, V> TdfMap<K, V> {
+        /// Construct a `SortedMap` from a presorted set of elements. This is faster
+        /// than creating an empty map and then inserting the elements individually.
+        ///
+        /// It is up to the caller to make sure that the elements are sorted by key
+        /// and that there are no duplicates.
+        #[inline]
+        pub fn from_presorted_elements(elements: Vec<(K, V)>) -> TdfMap<K, V> {
+            TdfMap { data: elements }
         }
 
-        entries.sort_by(|a, b| a.key.cmp(&b.key));
-    }
-}
-
-impl<K, V> TdfMap<K, V>
-where
-    K: PartialEq + Eq,
-{
-    /// Extends this map with the contents of another map. Any keys that already
-    /// exist in the map will be replaced with the keys from the other map
-    /// and any keys not present will be inserted
-    ///
-    /// `other` The map to extend with
-    pub fn extend(&mut self, other: TdfMap<K, V>) {
-        for MapEntry { key, value } in other.entries {
-            let key_index: Option<usize> = self.entries.iter().position(|value| key.eq(&value.key));
-            if let Some(index) = key_index {
-                self.entries[index].value = value;
-            } else {
-                self.insert(key, value);
+        #[inline]
+        pub fn insert(&mut self, key: K, mut value: V) -> Option<V> {
+            match self.lookup_index_for(&key) {
+                Ok(index) => {
+                    let slot = unsafe { self.data.get_unchecked_mut(index) };
+                    std::mem::swap(&mut slot.1, &mut value);
+                    Some(value)
+                }
+                Err(index) => {
+                    self.data.insert(index, (key, value));
+                    None
+                }
             }
         }
-    }
 
-    /// Returns the index of the provided key or None if
-    /// the key was not present
-    ///
-    /// `key` The key to find the index of
-    fn index_of_key<Q: ?Sized>(&self, key: &Q) -> Option<usize>
-    where
-        K: Borrow<Q>,
-        Q: Eq,
-    {
-        for index in 0..self.entries.len() {
-            let entry_at = &self.entries[index];
-            let key_at = entry_at.key.borrow();
-            if key_at.eq(key) {
-                return Some(index);
+        #[inline]
+        pub fn remove(&mut self, key: &K) -> Option<V> {
+            match self.lookup_index_for(key) {
+                Ok(index) => Some(self.data.remove(index).1),
+                Err(_) => None,
             }
         }
-        None
+
+        #[inline]
+        pub fn get<Q>(&self, key: &Q) -> Option<&V>
+        where
+            K: Borrow<Q>,
+            Q: Ord + ?Sized,
+        {
+            match self.lookup_index_for(key) {
+                Ok(index) => unsafe { Some(&self.data.get_unchecked(index).1) },
+                Err(_) => None,
+            }
+        }
+
+        #[inline]
+        pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
+        where
+            K: Borrow<Q>,
+            Q: Ord + ?Sized,
+        {
+            match self.lookup_index_for(key) {
+                Ok(index) => unsafe { Some(&mut self.data.get_unchecked_mut(index).1) },
+                Err(_) => None,
+            }
+        }
+
+        /// Gets a mutable reference to the value in the entry, or insert a new one.
+        #[inline]
+        pub fn get_mut_or_insert_default(&mut self, key: K) -> &mut V
+        where
+            K: Eq,
+            V: Default,
+        {
+            let index = match self.lookup_index_for(&key) {
+                Ok(index) => index,
+                Err(index) => {
+                    self.data.insert(index, (key, V::default()));
+                    index
+                }
+            };
+            unsafe { &mut self.data.get_unchecked_mut(index).1 }
+        }
+
+        #[inline]
+        pub fn clear(&mut self) {
+            self.data.clear();
+        }
+
+        /// Iterate over elements, sorted by key
+        #[inline]
+        pub fn iter(&self) -> std::slice::Iter<'_, (K, V)> {
+            self.data.iter()
+        }
+
+        /// Iterate over the keys, sorted
+        #[inline]
+        pub fn keys(&self) -> impl Iterator<Item = &K> + ExactSizeIterator + DoubleEndedIterator {
+            self.data.iter().map(|(k, _)| k)
+        }
+
+        /// Iterate over values, sorted by key
+        #[inline]
+        pub fn values(&self) -> impl Iterator<Item = &V> + ExactSizeIterator + DoubleEndedIterator {
+            self.data.iter().map(|(_, v)| v)
+        }
+
+        #[inline]
+        pub fn len(&self) -> usize {
+            self.data.len()
+        }
+
+        #[inline]
+        pub fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+
+        #[inline]
+        pub fn range<R>(&self, range: R) -> &[(K, V)]
+        where
+            R: RangeBounds<K>,
+        {
+            let (start, end) = self.range_slice_indices(range);
+            &self.data[start..end]
+        }
+
+        #[inline]
+        pub fn remove_range<R>(&mut self, range: R)
+        where
+            R: RangeBounds<K>,
+        {
+            let (start, end) = self.range_slice_indices(range);
+            self.data.splice(start..end, std::iter::empty());
+        }
+
+        /// Mutate all keys with the given function `f`. This mutation must not
+        /// change the sort-order of keys.
+        #[inline]
+        pub fn offset_keys<F>(&mut self, f: F)
+        where
+            F: Fn(&mut K),
+        {
+            self.data.iter_mut().map(|(k, _)| k).for_each(f);
+        }
+
+        /// Inserts a presorted range of elements into the map. If the range can be
+        /// inserted as a whole in between to existing elements of the map, this
+        /// will be faster than inserting the elements individually.
+        ///
+        /// It is up to the caller to make sure that the elements are sorted by key
+        /// and that there are no duplicates.
+        #[inline]
+        pub fn insert_presorted(&mut self, elements: Vec<(K, V)>) {
+            if elements.is_empty() {
+                return;
+            }
+
+            let start_index = self.lookup_index_for(&elements[0].0);
+
+            let elements = match start_index {
+                Ok(index) => {
+                    let mut elements = elements.into_iter();
+                    self.data[index] = elements.next().unwrap();
+                    elements
+                }
+                Err(index) => {
+                    if index == self.data.len() || elements.last().unwrap().0 < self.data[index].0 {
+                        // We can copy the whole range without having to mix with
+                        // existing elements.
+                        self.data.splice(index..index, elements.into_iter());
+                        return;
+                    }
+
+                    let mut elements = elements.into_iter();
+                    self.data.insert(index, elements.next().unwrap());
+                    elements
+                }
+            };
+
+            // Insert the rest
+            for (k, v) in elements {
+                self.insert(k, v);
+            }
+        }
+
+        /// Looks up the key in `self.data` via `slice::binary_search()`.
+        #[inline(always)]
+        fn lookup_index_for<Q>(&self, key: &Q) -> Result<usize, usize>
+        where
+            K: Borrow<Q>,
+            Q: Ord + ?Sized,
+        {
+            self.data.binary_search_by(|(x, _)| x.borrow().cmp(key))
+        }
+
+        #[inline]
+        fn range_slice_indices<R>(&self, range: R) -> (usize, usize)
+        where
+            R: RangeBounds<K>,
+        {
+            let start = match range.start_bound() {
+                Bound::Included(k) => match self.lookup_index_for(k) {
+                    Ok(index) | Err(index) => index,
+                },
+                Bound::Excluded(k) => match self.lookup_index_for(k) {
+                    Ok(index) => index + 1,
+                    Err(index) => index,
+                },
+                Bound::Unbounded => 0,
+            };
+
+            let end = match range.end_bound() {
+                Bound::Included(k) => match self.lookup_index_for(k) {
+                    Ok(index) => index + 1,
+                    Err(index) => index,
+                },
+                Bound::Excluded(k) => match self.lookup_index_for(k) {
+                    Ok(index) | Err(index) => index,
+                },
+                Bound::Unbounded => self.data.len(),
+            };
+
+            (start, end)
+        }
+
+        #[inline]
+        pub fn contains_key<Q>(&self, key: &Q) -> bool
+        where
+            K: Borrow<Q>,
+            Q: Ord + ?Sized,
+        {
+            self.get(key).is_some()
+        }
     }
 
-    /// Removes a value by its key and returns the entry
-    /// that was present at that position.
-    ///
-    /// `key` The key to remove
-    pub fn remove(&mut self, key: &K) -> Option<(K, V)> {
-        let index = self.index_of_key(key)?;
-        let entry = self.entries.remove(index);
-        Some((entry.key, entry.value))
+    impl<K: Ord, V> IntoIterator for TdfMap<K, V> {
+        type Item = (K, V);
+        type IntoIter = std::vec::IntoIter<(K, V)>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.data.into_iter()
+        }
     }
 
-    /// Returns the value stored at the provided key if
-    /// its present or None.
-    ///
-    /// `key` The key to retrieve the value for
-    #[inline]
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    impl<'a, K, Q, V> Index<&'a Q> for TdfMap<K, V>
     where
-        K: Borrow<Q>,
-        Q: Eq,
+        K: Ord + Borrow<Q>,
+        Q: Ord + ?Sized,
     {
-        let index = self.index_of_key(key)?;
-        let entry = self.entries.get(index)?;
-        Some(&entry.value)
+        type Output = V;
+
+        fn index(&self, key: &Q) -> &Self::Output {
+            self.get(key).expect("no entry found for key")
+        }
     }
 
-    /// Returns a mutable borrow to the value stored at the
-    /// provided key if its present or None.
-    ///
-    /// `key` The key to retrieve the value for
-    #[inline]
-    pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
+    impl<'a, K, Q, V> IndexMut<&'a Q> for TdfMap<K, V>
     where
-        K: Borrow<Q>,
-        Q: Eq,
+        K: Ord + Borrow<Q>,
+        Q: Ord + ?Sized,
     {
-        let index = self.index_of_key(key)?;
-        let entry = self.entries.get_mut(index)?;
-
-        Some(&mut entry.value)
+        fn index_mut(&mut self, key: &Q) -> &mut Self::Output {
+            self.get_mut(key).expect("no entry found for key")
+        }
     }
 
-    /// Takes the value stored at the provided key out of
-    /// the map taking ownership this also removes the key.
-    pub fn get_owned<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
+    impl<K: Ord, V> FromIterator<(K, V)> for TdfMap<K, V> {
+        fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+            let mut data: Vec<(K, V)> = iter.into_iter().collect();
+
+            data.sort_unstable_by(|(k1, _), (k2, _)| k1.cmp(k2));
+            data.dedup_by(|(k1, _), (k2, _)| k1 == k2);
+
+            TdfMap { data }
+        }
+    }
+
+    impl<K: Debug, V: Debug> Debug for TdfMap<K, V> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_map()
+                .entries(self.data.iter().map(|(a, b)| (a, b)))
+                .finish()
+        }
+    }
+
+    impl<K, V> TdfSerialize for TdfMap<K, V>
     where
-        K: Borrow<Q>,
-        Q: Eq,
+        K: TdfSerialize + TdfTyped,
+        V: TdfSerialize + TdfTyped,
     {
-        let index = self.index_of_key(key)?;
-        let entry = self.entries.remove(index);
-        Some(entry.value)
-    }
-}
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_map_header(K::TYPE, V::TYPE, self.len());
 
-/// Iterator implementation for iterating over TdfMap
-pub struct MapEntryIter<'a, K, V> {
-    /// The underlying map entry iterator
-    inner: slice::Iter<'a, MapEntry<K, V>>,
-}
-
-impl<'a, K, V> Iterator for MapEntryIter<'a, K, V> {
-    type Item = (&'a K, &'a V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let next = self.inner.next()?;
-
-        Some((&next.key, &next.value))
-    }
-}
-
-/// Iterator type sitting ontop of the map entries to
-/// produce unions of the key values from the vec of
-/// map entries
-pub struct OwnedMapEntryIter<K, V> {
-    /// The underlying entry iterator
-    inner: vec::IntoIter<MapEntry<K, V>>,
-}
-
-impl<K, V> Iterator for OwnedMapEntryIter<K, V> {
-    type Item = (K, V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let MapEntry { key, value } = self.inner.next()?;
-        Some((key, value))
-    }
-}
-
-/// Into iterator implementation for owned map
-impl<K, V> IntoIterator for TdfMap<K, V> {
-    type Item = (K, V);
-    type IntoIter = OwnedMapEntryIter<K, V>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        OwnedMapEntryIter {
-            inner: self.entries.into_iter(),
+            self.data.iter().for_each(|(key, value)| {
+                key.serialize(output);
+                value.serialize(output);
+            });
         }
     }
-}
 
-/// Into iterator implementation for borrowed map
-impl<'a, K, V> IntoIterator for &'a TdfMap<K, V> {
-    type Item = (&'a K, &'a V);
-    type IntoIter = MapEntryIter<'a, K, V>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        MapEntryIter {
-            inner: self.entries.iter(),
+    impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
+    where
+        K: TdfDeserialize<'de> + TdfTyped,
+        V: TdfDeserialize<'de> + TdfTyped,
+    {
+        #[inline]
+        fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_map()
         }
     }
-}
 
-impl<K, V, B: Into<K>, A: Into<V>> FromIterator<(B, A)> for TdfMap<K, V> {
-    fn from_iter<T: IntoIterator<Item = (B, A)>>(iter: T) -> Self {
-        let entries: Vec<MapEntry<K, V>> = iter
-            .into_iter()
-            .map(|(key, value)| MapEntry {
-                key: key.into(),
-                value: value.into(),
-            })
-            .collect();
-        Self { entries }
-    }
-}
-
-impl<K, V> TdfSerialize for TdfMap<K, V>
-where
-    K: TdfSerialize + TdfTyped,
-    V: TdfSerialize + TdfTyped,
-{
-    fn serialize(&self, output: &mut TdfSerializer) {
-        output.write_map_header(K::TYPE, V::TYPE, self.len());
-
-        for MapEntry { key, value } in &self.entries {
-            key.serialize(output);
-            value.serialize(output);
-        }
-    }
-}
-
-impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
-where
-    K: TdfDeserialize<'de> + TdfTyped,
-    V: TdfDeserialize<'de> + TdfTyped,
-{
-    #[inline]
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_map()
-    }
-}
-
-impl<K, V> TdfTyped for TdfMap<K, V> {
-    const TYPE: TdfType = TdfType::Map;
-}
-
-/// Implementation for converting a HashMap to a TdfMap by taking
-/// all its keys and values and building lists for the TdfMap
-impl<K, V> From<HashMap<K, V>> for TdfMap<K, V> {
-    fn from(map: HashMap<K, V>) -> Self {
-        let mut entries: Vec<MapEntry<K, V>> = Vec::with_capacity(map.len());
-
-        for (key, value) in map.into_iter() {
-            entries.push(MapEntry { key, value });
-        }
-
-        Self { entries }
+    impl<K, V> TdfTyped for TdfMap<K, V> {
+        const TYPE: TdfType = TdfType::Map;
     }
 }
 
