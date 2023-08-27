@@ -513,7 +513,7 @@ impl<'de> TdfReader<'de> {
             TdfType::Group => self.skip_group()?,
             TdfType::List => self.skip_list()?,
             TdfType::Map => self.skip_map()?,
-            TdfType::Union => self.skip_union()?,
+            TdfType::TaggedUnion => self.skip_union()?,
             TdfType::VarIntList => self.skip_var_int_list()?,
             TdfType::ObjectType => {
                 self.skip_var_int();
@@ -690,7 +690,7 @@ impl<'de> TdfReader<'de> {
                 out.push_str(&"  ".repeat(indent));
                 out.push('}');
             }
-            TdfType::Union => {
+            TdfType::TaggedUnion => {
                 let ty = self.read_byte()?;
                 if ty == TaggedUnion::<()>::UNSET_KEY {
                     out.push_str("Union(Unset)")

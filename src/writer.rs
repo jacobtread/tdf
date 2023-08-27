@@ -235,7 +235,7 @@ impl TdfSerializer {
     /// `tag` The tag to write
     /// `key` The key to write
     pub fn tag_union_start(&mut self, tag: &[u8], key: u8) {
-        self.tag(tag, TdfType::Union);
+        self.tag(tag, TdfType::TaggedUnion);
         self.buffer.push(key);
     }
 
@@ -536,7 +536,7 @@ mod test {
             TdfType::Group,
             TdfType::List,
             TdfType::Map,
-            TdfType::Union,
+            TdfType::TaggedUnion,
             TdfType::VarIntList,
             TdfType::ObjectType,
             TdfType::ObjectId,
@@ -727,19 +727,19 @@ mod test {
         let mut writer = TdfSerializer::default();
         writer.tag_union_start(b"TEST", 15);
         assert_eq!(writer.buffer.len(), 5);
-        assert_eq!(writer.buffer[3], TdfType::Union as u8);
+        assert_eq!(writer.buffer[3], TdfType::TaggedUnion as u8);
         assert_eq!(writer.buffer[4], 15);
         writer.clear();
 
         writer.tag_union_unset(b"TEST");
         assert_eq!(writer.buffer.len(), 5);
-        assert_eq!(writer.buffer[3], TdfType::Union as u8);
+        assert_eq!(writer.buffer[3], TdfType::TaggedUnion as u8);
         assert_eq!(writer.buffer[4], TaggedUnion::<()>::UNSET_KEY);
         writer.clear();
 
         writer.tag_union_value(b"TEST", 5, b"TEST2", &15);
         assert_eq!(writer.buffer.len(), 10);
-        assert_eq!(writer.buffer[3], TdfType::Union as u8);
+        assert_eq!(writer.buffer[3], TdfType::TaggedUnion as u8);
         assert_eq!(writer.buffer[4], 5);
         assert_eq!(writer.buffer[8], TdfType::VarInt as u8);
         assert_eq!(writer.buffer[9], 15);

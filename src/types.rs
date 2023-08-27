@@ -792,7 +792,7 @@ pub mod tagged_union {
     }
 
     impl<Value> TdfTyped for TaggedUnion<Value> {
-        const TYPE: TdfType = TdfType::Union;
+        const TYPE: TdfType = TdfType::TaggedUnion;
     }
 
     impl<'de, Value> TdfDeserialize<'de> for TaggedUnion<Value>

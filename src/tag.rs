@@ -69,7 +69,7 @@ pub enum TdfType {
     /// Map of TdfType to TdfType
     Map = 0x5,
     /// Union of value where with unset type
-    Union = 0x6,
+    TaggedUnion = 0x6,
     /// List of variable length integers
     VarIntList = 0x7,
     /// Pair of two var int values
@@ -94,7 +94,7 @@ impl TryFrom<u8> for TdfType {
             0x3 => TdfType::Group,
             0x4 => TdfType::List,
             0x5 => TdfType::Map,
-            0x6 => TdfType::Union,
+            0x6 => TdfType::TaggedUnion,
             0x7 => TdfType::VarIntList,
             0x8 => TdfType::ObjectType,
             0x9 => TdfType::ObjectId,
