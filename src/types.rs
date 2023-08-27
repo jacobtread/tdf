@@ -20,7 +20,7 @@ pub mod var_int {
 
     impl TdfDeserializeOwned for bool {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let value = r.read_u8()?;
+            let value = u8::deserialize_owned(r)?;
             Ok(value == 1)
         }
     }
@@ -38,16 +38,34 @@ pub mod var_int {
     // VarInt u8
 
     impl TdfDeserializeOwned for u8 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            reader.read_u8()
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let first: u8 = r.read_byte()?;
+            let mut result: u8 = first & 63;
+            // Values less than 128 are already complete and don't need more reading
+            if first < 128 {
+                return Ok(result);
+            }
+
+            let byte: u8 = r.read_byte()?;
+            result |= (byte & 127) << 6;
+
+            // Consume remaining unused VarInt data. We only wanted a u8
+            if byte >= 128 {
+                r.skip_var_int();
+            }
+            Ok(result)
         }
     }
 
-    impl TdfSerialize for u8 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u8(*self)
+    impl TdfSerializeOwned for u8 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            // Values < 64 are directly appended to buffer
+            if self < 64 {
+                w.write_byte(self);
+                return;
+            }
+            w.write_byte((self & 63) | 128);
+            w.write_byte(self >> 6);
         }
     }
 
@@ -58,16 +76,15 @@ pub mod var_int {
     // VarInt i8
 
     impl TdfDeserializeOwned for i8 {
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let value = reader.read_u8()?;
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let value = u8::deserialize_owned(r)?;
             Ok(value as i8)
         }
     }
 
-    impl TdfSerialize for i8 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u8(*self as u8)
+    impl TdfSerializeOwned for i8 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            (self as u8).serialize_owned(w)
         }
     }
 
@@ -158,16 +175,35 @@ pub mod var_int {
     // VarInt u64
 
     impl TdfDeserializeOwned for u64 {
-        #[inline]
-        fn deserialize_owned(reader: &mut TdfDeserializer) -> DecodeResult<Self> {
-            reader.read_u64()
+        fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
+            let mut byte: u8 = r.read_byte()?;
+            let mut result: u64 = (byte & 0x3F) as u64;
+            let mut shift = 6;
+            while byte >= 0x80 {
+                byte = r.read_byte()?;
+                result |= ((byte & 0x7f) as u64).wrapping_shl(shift);
+                shift += 7;
+            }
+
+            Ok(result)
         }
     }
 
-    impl TdfSerialize for u64 {
-        #[inline]
-        fn serialize(&self, output: &mut TdfSerializer) {
-            output.write_u64(*self)
+    impl TdfSerializeOwned for u64 {
+        fn serialize_owned(self, w: &mut TdfSerializer) {
+            if self < 64 {
+                w.write_byte(self as u8);
+                return;
+            }
+            let mut byte: u8 = ((self & 63) as u8) | 128;
+            w.write_byte(byte);
+            let mut cur_shift = self >> 6;
+            while cur_shift >= 128 {
+                byte = ((cur_shift & 127) | 128) as u8;
+                cur_shift >>= 7;
+                w.write_byte(byte);
+            }
+            w.write_byte(cur_shift as u8)
         }
     }
 
@@ -236,7 +272,49 @@ pub mod var_int {
     }
 
     #[cfg(test)]
-    mod test {}
+    mod test {
+        use crate::{
+            codec::{TdfDeserializeOwned, TdfSerialize},
+            reader::TdfDeserializer,
+            writer::TdfSerializer,
+        };
+
+        #[test]
+        fn test_u64_encoding() {
+            let mut w = TdfSerializer::default();
+
+            let values: &[(u64, &[u8])] = &[
+                (5, &[5]),
+                (128, &[128, 2]),
+                (256, &[128, 4]),
+                (512, &[128, 8]),
+                (321, &[129, 5]),
+                (2048, &[128, 32]),
+                (4096, &[128, 64]),
+                (4632, &[152, 72]),
+                (8192, &[128, 128, 1]),
+                (16384, &[128, 128, 2]),
+                (32768, &[128, 128, 4]),
+                (65536, &[128, 128, 8]),
+                (4294967296, &[128, 128, 128, 128, 32]),
+                (
+                    9223372036854776000,
+                    &[128, 131, 128, 128, 128, 128, 128, 128, 128, 2],
+                ),
+            ];
+
+            for (value, expected) in values {
+                value.serialize(&mut w);
+                assert_eq!(&w.buffer, expected);
+
+                let mut r = TdfDeserializer::new(&w.buffer);
+                let read_value = u64::deserialize_owned(&mut r).unwrap();
+                assert_eq!(read_value, *value);
+
+                w.clear();
+            }
+        }
+    }
 }
 
 pub mod string {

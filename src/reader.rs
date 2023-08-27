@@ -124,25 +124,6 @@ impl<'de> TdfDeserializer<'de> {
         self.cursor >= self.buffer.len()
     }
 
-    /// Decodes a u8 value using the VarInt encoding
-    pub fn read_u8(&mut self) -> DecodeResult<u8> {
-        let first: u8 = self.read_byte()?;
-        let mut result: u8 = first & 63;
-        // Values less than 128 are already complete and don't need more reading
-        if first < 128 {
-            return Ok(result);
-        }
-
-        let byte: u8 = self.read_byte()?;
-        result |= (byte & 127) << 6;
-
-        // Consume remaining unused VarInt data. We only wanted a u8
-        if byte >= 128 {
-            self.skip_var_int();
-        }
-        Ok(result)
-    }
-
     /// Decodes a u16 value using hte VarInt encoding. This uses
     /// the impl_decode_var macro so its implementation is the
     /// same as others
