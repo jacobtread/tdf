@@ -938,12 +938,22 @@ pub mod object_type {
         writer::TdfSerializer,
     };
 
+    /// [ObjectType] structure represents a type of object
+    /// within the blaze system, this type consists of a
+    /// component value and a type value
     #[derive(Debug, PartialEq, Eq, Clone)]
     pub struct ObjectType {
-        /// Component for the object type
+        /// The component type for this object
         pub component: u16,
-        /// The object type
+        /// The actual object type
         pub ty: u16,
+    }
+
+    impl ObjectType {
+        /// Create a new [ObjectType] from its component and type
+        pub fn new(component: u16, ty: u16) -> Self {
+            Self { component, ty }
+        }
     }
 
     impl TdfSerialize for ObjectType {
@@ -1002,6 +1012,7 @@ pub mod object_type {
 }
 
 pub mod object_id {
+    use super::object_type::ObjectType;
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
@@ -1010,14 +1021,29 @@ pub mod object_id {
         writer::TdfSerializer,
     };
 
-    use super::object_type::ObjectType;
-
+    /// [ObjectId] structure represents an ID within the blaze system that
+    /// is also tied to a specific [ObjectType]
     #[derive(Debug, PartialEq, Eq, Clone)]
     pub struct ObjectId {
-        /// The object type
+        /// The type of object the ID represents
         pub ty: ObjectType,
-        /// The object ID
+        /// The actual ID of the object
         pub id: u64,
+    }
+
+    impl ObjectId {
+        /// Create a new [ObjectId] from its type and id
+        pub fn new(ty: ObjectType, id: u64) -> Self {
+            Self { ty, id }
+        }
+
+        /// Create a new [ObjectId] from its component, type, and id
+        pub fn new_raw(component: u16, ty: u16, id: u64) -> Self {
+            Self {
+                ty: ObjectType { component, ty },
+                id,
+            }
+        }
     }
 
     impl TdfSerialize for ObjectId {
