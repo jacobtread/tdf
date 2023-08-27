@@ -62,18 +62,14 @@ impl<'de> TdfReader<'de> {
         Ok(byte)
     }
 
-    /// Attempts to take four bytes from the underlying buffer moving
-    /// the cursor over 4 bytes. This is used when decoding tags and
-    /// taking floats as they both require 4 bytes. Will return an
-    /// UnexpectedEof error if there is not 4 bytes after the cursor
-    fn read_byte_4(&mut self) -> DecodeResult<[u8; 4]> {
+    fn read_bytes<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
         // Ensure we have the required number of bytes
-        self.expect_length(4)?;
+        self.expect_length(S)?;
         // Alocate and copy the bytes from the buffer
-        let mut bytes: [u8; 4] = [0u8; 4];
-        bytes.copy_from_slice(&self.buffer[self.cursor..self.cursor + 4]);
+        let mut bytes: [u8; S] = [0u8; S];
+        bytes.copy_from_slice(&self.buffer[self.cursor..self.cursor + S]);
         // Move the cursor
-        self.cursor += 4;
+        self.cursor += S;
         Ok(bytes)
     }
 
@@ -98,7 +94,7 @@ impl<'de> TdfReader<'de> {
     /// Takes a float value from the buffer which moves the
     /// cursor over by 4 bytes
     pub fn read_f32(&mut self) -> DecodeResult<f32> {
-        let bytes: [u8; 4] = self.read_byte_4()?;
+        let bytes: [u8; 4] = self.read_bytes()?;
         Ok(f32::from_be_bytes(bytes))
     }
 
@@ -385,7 +381,7 @@ impl<'de> TdfReader<'de> {
 
     /// Reads a tag from the underlying buffer
     pub fn read_tag(&mut self) -> DecodeResult<Tagged> {
-        let input: [u8; 4] = self.read_byte_4()?;
+        let input: [u8; 4] = self.read_bytes()?;
         let ty: TdfType = TdfType::try_from(input[3])?;
         let mut output: [u8; 4] = [0, 0, 0, 0];
 
