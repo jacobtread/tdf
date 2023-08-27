@@ -366,7 +366,7 @@ pub mod string {
 
 pub mod blob {
     use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfSerializeOwned, TdfTyped},
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
         reader::TdfDeserializer,
         tag::TdfType,
@@ -388,17 +388,30 @@ pub mod blob {
         }
     }
 
+    impl Blob<'_> {
+        pub fn serialize_raw(w: &mut TdfSerializer, slice: &[u8]) {
+            slice.len().serialize_owned(w);
+            w.write_slice(slice);
+        }
+
+        pub fn deserialize_raw<'de>(r: &mut TdfDeserializer<'de>) -> DecodeResult<&'de [u8]> {
+            let length = usize::deserialize_owned(r)?;
+            let bytes = r.read_slice(length)?;
+            Ok(bytes)
+        }
+    }
+
     impl<'de> TdfDeserialize<'de> for Blob<'de> {
-        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            let bytes = reader.read_blob()?;
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+            let bytes = Self::deserialize_raw(r)?;
             Ok(Blob(bytes))
         }
     }
 
     impl TdfSerialize for Blob<'_> {
+        #[inline]
         fn serialize(&self, w: &mut TdfSerializer) {
-            self.0.len().serialize_owned(w);
-            w.write_slice(self.0);
+            Self::serialize_raw(w, self.0)
         }
     }
 
