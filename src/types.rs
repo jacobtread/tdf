@@ -315,27 +315,50 @@ pub mod var_int {
 }
 
 pub mod string {
+    use std::borrow::Cow;
+
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
-        error::DecodeResult,
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
+        error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
+        serialize,
         tag::TdfType,
         writer::TdfSerializer,
     };
 
+    use super::Blob;
+
     // str slice types
 
     impl<'de> TdfDeserialize<'de> for &'de str {
-        #[inline]
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            r.read_str()
+            let bytes: &'de [u8] = Blob::deserialize_raw(r)?;
+            let text: &'de str =
+                std::str::from_utf8(bytes).map_err(DecodeError::InvalidUtf8Value)?;
+
+            if text.is_empty() {
+                return Err(DecodeError::Other("String value has zero length"));
+            }
+
+            Ok(&text[..text.len() - 1])
         }
     }
 
     impl TdfSerialize for &str {
-        #[inline]
         fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_str(self)
+            let bytes = self.as_bytes();
+            let needs_terminator = !matches!(bytes.last(), Some(0));
+            let mut length = bytes.len();
+            if needs_terminator {
+                length += 1;
+            }
+
+            length.serialize_owned(w);
+            w.write_slice(bytes);
+
+            if needs_terminator {
+                w.write_byte(0);
+            }
         }
     }
 
@@ -346,16 +369,20 @@ pub mod string {
     // Owned String types
 
     impl TdfDeserializeOwned for String {
-        #[inline]
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
-            r.read_string()
+            let bytes: &[u8] = Blob::deserialize_raw(r)?;
+            let text: Cow<str> = String::from_utf8_lossy(bytes);
+            let mut text: String = text.to_string();
+            // Remove null terminator
+            text.pop();
+            Ok(text)
         }
     }
 
     impl TdfSerialize for String {
         #[inline]
         fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_str(self);
+            self.as_str().serialize(w);
         }
     }
 
@@ -1256,7 +1283,7 @@ pub mod u12 {
     impl<'de> TdfDeserialize<'de> for U12<'de> {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let data: [u8; 8] = r.read_bytes()?;
-            let value: &str = r.read_str()?;
+            let value: &str = <&str>::deserialize(r)?;
             Ok(Self { data, value })
         }
     }
@@ -1264,7 +1291,7 @@ pub mod u12 {
     impl TdfSerialize for U12<'_> {
         fn serialize(&self, w: &mut crate::writer::TdfSerializer) {
             w.write_slice(&self.data);
-            w.write_str(self.value);
+            self.value.serialize(w);
         }
     }
 

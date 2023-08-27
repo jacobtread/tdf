@@ -1,14 +1,12 @@
 //! Buffer reading wrapper to provided a way to easily read data from
 //! packet buffers provides easy functions for all the different tdf types
 
-use crate::types::{TaggedUnion, TdfMap};
-
 use super::{
     codec::{TdfDeserialize, TdfDeserializeOwned, TdfTyped},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
 };
-use std::borrow::Cow;
+use crate::types::{Blob, TaggedUnion, TdfMap};
 
 /// Buffered readable implementation. Allows reading through the
 /// underlying slice using a cursor and with a position that can
@@ -99,35 +97,6 @@ impl<'de> TdfDeserializer<'de> {
     /// Returns if there is nothing left after the cursor
     pub fn is_empty(&self) -> bool {
         self.cursor >= self.buffer.len()
-    }
-
-    /// Reads a blob from the buffer. The blob is a slice prefixed
-    /// by a length value
-    pub fn read_blob(&mut self) -> DecodeResult<&'de [u8]> {
-        let length: usize = usize::deserialize_owned(self)?;
-        let bytes: &[u8] = self.read_slice(length)?;
-        Ok(bytes)
-    }
-
-    pub fn read_str(&mut self) -> DecodeResult<&'de str> {
-        let bytes: &[u8] = self.read_blob()?;
-        let text: &str = std::str::from_utf8(bytes).map_err(DecodeError::InvalidUtf8Value)?;
-
-        if text.is_empty() {
-            return Err(DecodeError::Other("String value had zero length"));
-        }
-
-        Ok(&text[..text.len() - 1])
-    }
-
-    /// Reads a string from the underlying buffer
-    pub fn read_string(&mut self) -> DecodeResult<String> {
-        let bytes: &[u8] = self.read_blob()?;
-        let text: Cow<str> = String::from_utf8_lossy(bytes);
-        let mut text: String = text.to_string();
-        // Remove null terminator
-        text.pop();
-        Ok(text)
     }
 
     /// Reads a map from the underlying buffer
@@ -514,13 +483,13 @@ impl<'de> TdfDeserializer<'de> {
                 out.push_str(&value.to_string());
             }
             TdfType::String => {
-                let value = self.read_string()?;
+                let value = String::deserialize_owned(self)?;
                 out.push('"');
                 out.push_str(&value);
                 out.push('"');
             }
             TdfType::Blob => {
-                let value = self.read_blob()?;
+                let value = Blob::deserialize_raw(self)?;
                 let length = value.len();
                 out.push_str("Blob [");
                 for (i, value) in value.iter().enumerate() {
@@ -655,7 +624,7 @@ impl<'de> TdfDeserializer<'de> {
             TdfType::U12 => {
                 let bytes = self.read_slice(8)?;
                 out.push_str(&format!("{:?} + ", bytes));
-                let value = self.read_string()?;
+                let value = String::deserialize_owned(self)?;
                 out.push_str(&format!("\"{}\"", value));
             }
         };

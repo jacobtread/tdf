@@ -36,6 +36,12 @@ impl TdfSerializer {
         self.buffer.extend_from_slice(value);
     }
 
+    /// Clears the contents of the underlying buffer
+    #[inline]
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
     /// Writes the value type byte of the provided TdfType
     ///
     /// `ty` The type to write
@@ -167,7 +173,7 @@ impl TdfSerializer {
     /// `value` The value to write
     pub fn tag_str(&mut self, tag: &[u8], value: &str) {
         self.tag(tag, TdfType::String);
-        self.write_str(value)
+        value.serialize(self);
     }
 
     /// Writes a new tag indicating the start of a new group
@@ -327,24 +333,6 @@ impl TdfSerializer {
         self.buffer.extend_from_slice(&[1, 0])
     }
 
-    /// Writes a string to the underlying buffer. The bytes
-    /// are encoded an a null terminator is appended to the
-    /// end then the size and bytes are written to the buffer
-    ///
-    /// `value` The string value to write
-    pub fn write_str(&mut self, value: &str) {
-        let mut bytes = value.as_bytes().to_vec();
-        match bytes.last() {
-            // Ignore if already null terminated
-            Some(0) => {}
-            // Null terminate
-            _ => bytes.push(0),
-        }
-
-        bytes.len().serialize_owned(self);
-        self.write_slice(&bytes);
-    }
-
     /// Writes the header for a map in order to begin writing map values
     ///
     /// `key_type`   The type of the map keys
@@ -354,11 +342,6 @@ impl TdfSerializer {
         self.write_type(key_type);
         self.write_type(value_type);
         length.serialize_owned(self);
-    }
-
-    /// Clears the contents of the underlying buffer
-    pub fn clear(&mut self) {
-        self.buffer.clear();
     }
 }
 
