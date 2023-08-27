@@ -46,13 +46,12 @@ impl<'de> TdfDeserializer<'de> {
     }
 
     pub fn read_bytes<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
-        // Ensure we have the required number of bytes
-        self.expect_length(S)?;
-        // Alocate and copy the bytes from the buffer
+        let slice = self.read_slice(S)?;
+
+        // Copy the bytes into the new fixed size array
         let mut bytes: [u8; S] = [0u8; S];
-        bytes.copy_from_slice(&self.buffer[self.cursor..self.cursor + S]);
-        // Move the cursor
-        self.cursor += S;
+        bytes.copy_from_slice(slice);
+
         Ok(bytes)
     }
 
