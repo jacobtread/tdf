@@ -480,6 +480,11 @@ pub mod list {
         Ok(())
     }
 
+    pub fn serialize_list_header(w: &mut TdfSerializer, ty: TdfType, length: usize) {
+        ty.serialize_owned(w);
+        length.serialize_owned(w);
+    }
+
     impl<'de, C> TdfDeserialize<'de> for Vec<C>
     where
         C: TdfDeserialize<'de> + TdfTyped,
@@ -516,8 +521,7 @@ pub mod list {
         V: TdfSerialize + TdfTyped,
     {
         fn serialize(&self, w: &mut TdfSerializer) {
-            V::TYPE.serialize_owned(w);
-            self.len().serialize_owned(w);
+            serialize_list_header(w, V::TYPE, self.len());
             self.iter().for_each(|value| value.serialize(w));
         }
     }

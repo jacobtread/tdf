@@ -3,8 +3,11 @@
 
 use crate::{
     codec::TdfSerializeOwned,
-    tag::Tagged,
-    types::{string::write_empty_str, TaggedUnion},
+    tag::{RawTag, Tagged},
+    types::{
+        list::serialize_list_header, map::serialize_map_header, string::write_empty_str, Blob,
+        TaggedUnion,
+    },
 };
 
 use super::{
@@ -22,72 +25,157 @@ pub struct TdfSerializer {
 }
 
 impl TdfSerializer {
-    #[inline]
-    pub fn write_byte(&mut self, value: u8) {
-        self.buffer.push(value)
+    /// Serializes the provided tag and value from a
+    /// reference.
+    ///
+    /// This function should be used when serializing structures
+    /// for strings, and slices use [TdfSerializer::tag_alt] and for primitives
+    /// types use [TdfSerializer::tag_owned]
+    ///
+    /// TODO: Update code example to include a structure instead
+    ///
+    /// ```
+    /// use tdf::writer::TdfSerializer;
+    ///
+    /// let mut w = TdfSerializer::default();
+    /// w.tag_ref(b"TEST", &1);
+    ///
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to use for this field
+    /// * value - The value to serialize
+    pub fn tag_ref<V>(&mut self, tag: RawTag, value: &V)
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        Tagged::serialize_raw(self, tag, V::TYPE);
+        value.serialize(self);
     }
 
-    #[inline]
-    pub fn write_slice(&mut self, value: &[u8]) {
-        self.buffer.extend_from_slice(value);
+    /// Serializes the provided tag and value
+    ///
+    /// This function should be used when serializing strings, and slices
+    /// use [TdfSerializer::tag+ref] for structures and for primitives
+    /// types use [TdfSerializer::tag_owned] (or the respective tag_{type} function)
+    ///
+    /// ```
+    /// use tdf::writer::TdfSerializer;
+    ///
+    /// let mut w = TdfSerializer::default();
+    /// let test_slice: &[u8] = &[0,5,12,23,255];
+    ///
+    /// w.tag_alt(b"TEST", "Example value");
+    /// w.tag_alt(b"TEST", test_slice);
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to use for this field
+    /// * value - The value to serialize
+    pub fn tag_alt<V>(&mut self, tag: RawTag, value: V)
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        Tagged::serialize_raw(self, tag, V::TYPE);
+        value.serialize(self);
     }
 
-    #[inline]
-    pub fn clear(&mut self) {
-        self.buffer.clear();
-    }
-
-    pub fn tag_bool(&mut self, tag: &[u8], value: bool) {
-        Tagged::serialize_raw(self, tag, TdfType::VarInt);
+    /// Tags a value using its serialize owned value. This extra
+    /// tagging value prevents extra copying that the normal
+    /// serialize does for primitives
+    ///
+    /// This function should be used for writing primitive values such
+    /// as boolean, integers, and floats:
+    ///
+    /// Alternatively when hard coding values you can use the tag_{ty}
+    /// functions to tag a specific value type
+    ///
+    /// ```
+    /// use tdf::writer::TdfSerializer;
+    ///
+    /// let mut w = TdfSerializer::default();
+    ///
+    /// w.tag_owned(b"TEST", false);
+    /// w.tag_owned(b"TEST", 123u8);
+    /// w.tag_owned(b"TEST", 123u64);
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to use for this field
+    /// * value - The owned value to serialize
+    pub fn tag_owned<V>(&mut self, tag: RawTag, value: V)
+    where
+        V: TdfSerializeOwned + TdfTyped,
+    {
+        Tagged::serialize_raw(self, tag, V::TYPE);
         value.serialize_owned(self);
     }
 
-    pub fn tag_zero(&mut self, tag: &[u8]) {
+    // Primitive integer tagging
+
+    pub fn tag_zero(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::VarInt);
         self.write_byte(0);
     }
 
-    pub fn tag_u8(&mut self, tag: &[u8], value: u8) {
-        Tagged::serialize_raw(self, tag, TdfType::VarInt);
-        value.serialize_owned(self);
+    #[inline]
+    pub fn tag_bool(&mut self, tag: RawTag, value: bool) {
+        self.tag_owned(tag, value);
     }
 
-    pub fn tag_u16(&mut self, tag: &[u8], value: u16) {
-        Tagged::serialize_raw(self, tag, TdfType::VarInt);
-        value.serialize_owned(self);
+    #[inline]
+    pub fn tag_u8(&mut self, tag: RawTag, value: u8) {
+        self.tag_owned(tag, value);
     }
 
-    pub fn tag_u32(&mut self, tag: &[u8], value: u32) {
-        Tagged::serialize_raw(self, tag, TdfType::VarInt);
-        value.serialize_owned(self);
+    #[inline]
+    pub fn tag_u16(&mut self, tag: RawTag, value: u16) {
+        self.tag_owned(tag, value);
     }
 
-    pub fn tag_u64(&mut self, tag: &[u8], value: u64) {
-        Tagged::serialize_raw(self, tag, TdfType::VarInt);
-        value.serialize_owned(self);
+    #[inline]
+    pub fn tag_u32(&mut self, tag: RawTag, value: u32) {
+        self.tag_owned(tag, value);
     }
 
-    pub fn tag_usize(&mut self, tag: &[u8], value: usize) {
-        Tagged::serialize_raw(self, tag, TdfType::VarInt);
-        value.serialize_owned(self);
+    #[inline]
+    pub fn tag_u64(&mut self, tag: RawTag, value: u64) {
+        self.tag_owned(tag, value);
     }
 
-    pub fn tag_str_empty(&mut self, tag: &[u8]) {
+    #[inline]
+    pub fn tag_usize(&mut self, tag: RawTag, value: usize) {
+        self.tag_owned(tag, value);
+    }
+
+    // String tagging
+
+    pub fn tag_str_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::String);
         write_empty_str(self);
     }
 
-    pub fn tag_empty_blob(&mut self, tag: &[u8]) {
+    #[inline]
+    pub fn tag_str(&mut self, tag: RawTag, value: &str) {
+        self.tag_alt(tag, value);
+    }
+
+    // Blob tagging
+
+    pub fn tag_empty_blob(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Blob);
         self.write_byte(0);
     }
 
-    pub fn tag_str(&mut self, tag: &[u8], value: &str) {
-        Tagged::serialize_raw(self, tag, TdfType::String);
-        value.serialize(self);
+    pub fn tag_blob(&mut self, tag: RawTag, blob: &[u8]) {
+        Tagged::serialize_raw(self, tag, TdfType::Blob);
+        Blob::serialize_raw(self, blob);
     }
 
-    pub fn tag_group(&mut self, tag: &[u8]) {
+    // Group tagging
+
+    #[inline]
+    pub fn tag_group(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Group);
     }
 
@@ -97,7 +185,7 @@ impl TdfSerializer {
     }
 
     #[inline]
-    pub fn group<F>(&mut self, tag: &[u8], gr: F)
+    pub fn group<F>(&mut self, tag: RawTag, gr: F)
     where
         F: FnOnce(&mut Self),
     {
@@ -106,65 +194,62 @@ impl TdfSerializer {
         self.tag_group_end();
     }
 
-    pub fn tag_list_start(&mut self, tag: &[u8], ty: TdfType, length: usize) {
+    // List tagging
+
+    pub fn tag_list_start(&mut self, tag: RawTag, ty: TdfType, length: usize) {
         Tagged::serialize_raw(self, tag, TdfType::List);
-        ty.serialize_owned(self);
-        length.serialize_owned(self);
+        serialize_list_header(self, ty, length);
     }
 
-    pub fn tag_union_start(&mut self, tag: &[u8], key: u8) {
+    #[inline]
+    pub fn tag_list_empty(&mut self, tag: RawTag, ty: TdfType) {
+        self.tag_list_start(tag, ty, 0);
+    }
+
+    #[inline]
+    pub fn tag_list_slice<V>(&mut self, tag: RawTag, value: &[V])
+    where
+        V: TdfSerialize + TdfTyped,
+    {
+        self.tag_alt(tag, value);
+    }
+
+    // Union tagging
+
+    pub fn tag_union_start(&mut self, tag: RawTag, key: u8) {
         Tagged::serialize_raw(self, tag, TdfType::TaggedUnion);
         self.write_byte(key);
     }
 
-    pub fn tag_union_value<C: TdfSerialize + TdfTyped>(
-        &mut self,
-        tag: &[u8],
-        key: u8,
-        value_tag: &[u8],
-        value: &C,
-    ) {
+    #[inline]
+    pub fn tag_union_value<C>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &C)
+    where
+        C: TdfSerialize + TdfTyped,
+    {
         self.tag_union_start(tag, key);
-        Tagged::serialize_raw(self, value_tag, C::TYPE);
-        value.serialize(self);
+        self.tag_ref(value_tag, value);
     }
 
-    pub fn tag_union_unset(&mut self, tag: &[u8]) {
+    #[inline]
+    pub fn tag_union_unset(&mut self, tag: RawTag) {
         self.tag_union_start(tag, TaggedUnion::<()>::UNSET_KEY);
     }
 
-    pub fn tag<V>(&mut self, tag: &[u8], value: &V)
-    where
-        V: TdfSerialize + TdfTyped,
-    {
-        Tagged::serialize_raw(self, tag, V::TYPE);
-        value.serialize(self);
-    }
+    // Var int list tagging
 
-    pub fn tag_list_empty(&mut self, tag: &[u8], ty: TdfType) {
-        Tagged::serialize_raw(self, tag, TdfType::List);
-        ty.serialize_owned(self);
-        self.write_byte(0);
-    }
-
-    pub fn tag_slice_list<C: TdfSerialize + TdfTyped>(&mut self, tag: &[u8], value: &[C]) {
-        Tagged::serialize_raw(self, tag, TdfType::List);
-        value.serialize(self);
-    }
-
-    pub fn tag_var_int_list_empty(&mut self, tag: &[u8]) {
+    pub fn tag_var_int_list_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::VarIntList);
         self.write_byte(0);
     }
 
-    pub fn tag_map_start(&mut self, tag: &[u8], key: TdfType, value: TdfType, length: usize) {
+    // Map tagging
+
+    pub fn tag_map_start(&mut self, tag: RawTag, key: TdfType, value: TdfType, length: usize) {
         Tagged::serialize_raw(self, tag, TdfType::Map);
-        key.serialize_owned(self);
-        value.serialize_owned(self);
-        length.serialize_owned(self);
+        serialize_map_header(self, key, value, length);
     }
 
-    pub fn tag_map_tuples<K, V>(&mut self, tag: &[u8], values: &[(K, V)])
+    pub fn tag_map_tuples<K, V>(&mut self, tag: RawTag, values: &[(K, V)])
     where
         K: TdfSerialize + TdfTyped,
         V: TdfSerialize + TdfTyped,
@@ -174,5 +259,26 @@ impl TdfSerializer {
             key.serialize(self);
             value.serialize(self);
         }
+    }
+
+    #[inline]
+    pub(crate) fn write_byte(&mut self, value: u8) {
+        self.buffer.push(value)
+    }
+
+    #[inline]
+    pub(crate) fn write_slice(&mut self, value: &[u8]) {
+        self.buffer.extend_from_slice(value);
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+}
+
+impl From<TdfSerializer> for Vec<u8> {
+    fn from(value: TdfSerializer) -> Self {
+        value.buffer
     }
 }

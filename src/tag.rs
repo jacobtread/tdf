@@ -10,6 +10,12 @@ use crate::{
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};
 
+/// Represents a raw byte tag string for example:
+/// ```
+/// b"TEST"
+/// ```
+pub type RawTag<'a> = &'a [u8];
+
 /// Represents the tag for a tagged value. Contains the
 /// tag itself and the type of value stored after
 pub struct Tagged {
