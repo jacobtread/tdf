@@ -2,9 +2,9 @@
 //! packet buffers provides easy functions for all the different tdf types
 
 use super::{
-    codec::{TdfDeserialize, TdfDeserializeOwned, TdfTyped},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
+    types::{TdfDeserialize, TdfDeserializeOwned, TdfTyped},
 };
 use crate::types::{
     blob::skip_blob,

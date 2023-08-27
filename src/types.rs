@@ -9,13 +9,62 @@ pub use tagged_union::TaggedUnion;
 pub use u12::U12;
 pub use var_int_list::VarIntList;
 
+use crate::{error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer};
+
+pub trait TdfDeserialize<'de>: Sized {
+    fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self>;
+}
+
+pub trait TdfDeserializeOwned: Sized {
+    fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self>;
+}
+
+impl<T> TdfDeserialize<'_> for T
+where
+    T: TdfDeserializeOwned,
+{
+    #[inline]
+    fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+        Self::deserialize_owned(r)
+    }
+}
+
+pub trait TdfSerialize: Sized {
+    fn serialize<S: TdfSerializer>(&self, w: &mut S);
+
+    fn serialize_vec(&self) -> Vec<u8> {
+        let mut output = Vec::new();
+        self.serialize(&mut output);
+        output
+    }
+}
+
+pub trait TdfSerializeOwned: Sized {
+    fn serialize_owned<S: TdfSerializer>(self, w: &mut S);
+}
+
+impl<T> TdfSerialize for T
+where
+    T: TdfSerializeOwned + Copy,
+{
+    #[inline]
+    fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+        (*self).serialize_owned(w)
+    }
+}
+
+/// Associated trait for types that can be encoded/decoded
+/// as a specific [TdfType] rather than just a generic
+/// encoding and decoding
+pub trait TdfTyped {
+    /// The [TdfType] this value is represented as
+    const TYPE: TdfType;
+}
+
 pub mod var_int {
+    use super::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped};
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     /// Skips amy un-read bytes from a variable-length integer
@@ -284,8 +333,8 @@ pub mod var_int {
     #[cfg(test)]
     mod test {
         use crate::{
-            codec::{TdfDeserializeOwned, TdfSerialize},
             reader::TdfDeserializer,
+            types::{TdfDeserializeOwned, TdfSerialize},
         };
 
         #[test]
@@ -328,8 +377,8 @@ pub mod var_int {
 
 pub mod string {
     use super::Blob;
+    use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
         tag::TdfType,
@@ -405,12 +454,9 @@ pub mod string {
 }
 
 pub mod blob {
+    use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     /// [Blob] is a structure representing a variable length chunk
@@ -466,12 +512,9 @@ pub mod blob {
 }
 
 pub mod list {
+    use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     pub fn skip_list(r: &mut TdfDeserializer) -> DecodeResult<()> {
@@ -538,6 +581,7 @@ pub mod list {
 }
 
 pub mod map {
+    use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use std::{
         borrow::Borrow,
         fmt::Debug,
@@ -545,7 +589,6 @@ pub mod map {
     };
 
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
         tag::TdfType,
@@ -938,8 +981,8 @@ pub mod map {
 }
 
 pub mod tagged_union {
+    use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped};
     use crate::{
-        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
         tag::{Tag, Tagged, TdfType},
@@ -1046,12 +1089,9 @@ pub mod tagged_union {
 }
 
 pub mod var_int_list {
+    use super::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     use super::var_int::skip_var_int;
@@ -1121,15 +1161,12 @@ pub mod var_int_list {
 }
 
 pub mod object_type {
-    use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+    use super::{
+        var_int::skip_var_int, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped,
     };
-
-    use super::var_int::skip_var_int;
+    use crate::{
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
+    };
 
     /// [ObjectType] structure represents a type of object
     /// within the blaze system, this type consists of a
@@ -1176,8 +1213,8 @@ pub mod object_type {
     #[cfg(test)]
     mod test {
         use crate::{
-            codec::{TdfDeserialize, TdfSerialize},
             reader::TdfDeserializer,
+            types::{TdfDeserialize, TdfSerialize},
         };
 
         use super::ObjectType;
@@ -1209,13 +1246,12 @@ pub mod object_type {
 }
 
 pub mod object_id {
-    use super::{object_type::ObjectType, var_int::skip_var_int};
+    use super::{
+        object_type::ObjectType, var_int::skip_var_int, TdfDeserializeOwned, TdfSerialize,
+        TdfSerializeOwned, TdfTyped,
+    };
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     /// [ObjectId] structure represents an ID within the blaze system that
@@ -1270,9 +1306,9 @@ pub mod object_id {
     #[cfg(test)]
     mod test {
         use crate::{
-            codec::{TdfDeserialize, TdfSerialize},
             reader::TdfDeserializer,
             types::object_type::ObjectType,
+            types::{TdfDeserialize, TdfSerialize},
         };
 
         use super::ObjectId;
@@ -1309,13 +1345,9 @@ pub mod object_id {
 }
 
 pub mod float {
-
+    use super::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped};
     use crate::{
-        codec::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     /// Skips the 4 bytes required for a 32 bit float value
@@ -1344,7 +1376,7 @@ pub mod float {
 
     #[cfg(test)]
     mod test {
-        use crate::{codec::TdfDeserializeOwned, codec::TdfSerialize, reader::TdfDeserializer};
+        use crate::{reader::TdfDeserializer, types::TdfDeserializeOwned, types::TdfSerialize};
 
         /// Tests f32 encoding and decoding
         #[test]
@@ -1375,12 +1407,9 @@ pub mod float {
 }
 
 pub mod u12 {
+    use super::{TdfDeserialize, TdfSerialize, TdfTyped};
     use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
-        error::DecodeResult,
-        reader::TdfDeserializer,
-        tag::TdfType,
-        writer::TdfSerializer,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
 
     /// [U12] The type/name for this structure is not yet known

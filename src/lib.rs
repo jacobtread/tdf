@@ -1,4 +1,3 @@
-pub mod codec;
 pub mod error;
 pub mod reader;
 pub mod serialize;

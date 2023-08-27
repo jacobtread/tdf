@@ -1,9 +1,9 @@
 //! Implementation for [`Tag`]s and [`TdfType`]s
 
 use crate::{
-    codec::{TdfDeserializeOwned, TdfSerializeOwned},
     error::DecodeResult,
     reader::TdfDeserializer,
+    types::{TdfDeserializeOwned, TdfSerializeOwned},
     writer::TdfSerializer,
 };
 

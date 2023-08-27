@@ -137,12 +137,12 @@
 //! * [shrink_to](TdfSerializer::shrink_to) - Shrinks the capacity of the underlying buffer
 
 use crate::{
-    codec::{TdfSerialize, TdfSerializeOwned, TdfTyped},
     tag::{RawTag, Tagged, TdfType},
     types::{
         list::serialize_list_header, map::serialize_map_header, string::write_empty_str,
         tagged_union::TAGGED_UNSET_KEY, Blob,
     },
+    types::{TdfSerialize, TdfSerializeOwned, TdfTyped},
 };
 
 /// [TdfSerializer] provides functions for writing tag values to a buffer for serialization.
