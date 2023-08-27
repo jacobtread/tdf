@@ -40,17 +40,17 @@ pub mod var_int {
     impl TdfDeserializeOwned for u8 {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
             let first: u8 = r.read_byte()?;
-            let mut result: u8 = first & 63;
+            let mut result: u8 = first & 0x3f;
             // Values less than 128 are already complete and don't need more reading
-            if first < 128 {
+            if first < 0x80 {
                 return Ok(result);
             }
 
             let byte: u8 = r.read_byte()?;
-            result |= (byte & 127) << 6;
+            result |= (byte & 0x7f) << 6;
 
             // Consume remaining unused VarInt data. We only wanted a u8
-            if byte >= 128 {
+            if byte >= 0x80 {
                 r.skip_var_int();
             }
             Ok(result)
@@ -60,11 +60,11 @@ pub mod var_int {
     impl TdfSerializeOwned for u8 {
         fn serialize_owned(self, w: &mut TdfSerializer) {
             // Values < 64 are directly appended to buffer
-            if self < 64 {
+            if self < 0x40 {
                 w.write_byte(self);
                 return;
             }
-            w.write_byte((self & 63) | 128);
+            w.write_byte((self & 0x3f) | 0x80);
             w.write_byte(self >> 6);
         }
     }
@@ -191,19 +191,20 @@ pub mod var_int {
 
     impl TdfSerializeOwned for u64 {
         fn serialize_owned(self, w: &mut TdfSerializer) {
-            if self < 64 {
+            if self < 0x40 {
                 w.write_byte(self as u8);
                 return;
             }
-            let mut byte: u8 = ((self & 63) as u8) | 128;
-            w.write_byte(byte);
-            let mut cur_shift = self >> 6;
-            while cur_shift >= 128 {
-                byte = ((cur_shift & 127) | 128) as u8;
-                cur_shift >>= 7;
-                w.write_byte(byte);
+
+            w.write_byte(((self & 0x3f) | 0x80) as u8);
+
+            let mut value = self >> 6;
+            while value >= 0x80 {
+                w.write_byte(((value & 0x7f) | 0x80) as u8);
+                value >>= 7;
             }
-            w.write_byte(cur_shift as u8)
+
+            w.write_byte(value as u8)
         }
     }
 
