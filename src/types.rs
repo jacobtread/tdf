@@ -180,16 +180,6 @@ where
 /// Key value for unions that are unset
 pub const UNION_UNSET: u8 = 0x7F;
 
-/// Trait implemented by VarInt types
-pub trait VarInt: PartialEq + Eq + Debug + TdfSerialize + for<'a> TdfDeserialize<'a> {}
-
-/// Macro for implementing the var int trait in bulk easily
-macro_rules! impl_var_int {
-    ($($ty:ty),*) => { $(impl VarInt for $ty {})* };
-}
-
-impl_var_int!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
-
 /// Structure for maps used in the protocol. These maps have a special
 /// order that is usually required and they retain the order of insertion
 /// because it uses two vecs as the underlying structure
