@@ -62,7 +62,7 @@ impl<'de> TdfReader<'de> {
         Ok(byte)
     }
 
-    fn read_bytes<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
+    pub fn read_bytes<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
         // Ensure we have the required number of bytes
         self.expect_length(S)?;
         // Alocate and copy the bytes from the buffer

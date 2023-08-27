@@ -6,6 +6,7 @@ pub use map::TdfMap;
 pub use object_id::ObjectId;
 pub use object_type::ObjectType;
 pub use tagged_union::TaggedUnion;
+pub use u12::U12;
 pub use var_int_list::VarIntList;
 
 pub mod var_int_list {
@@ -956,18 +957,18 @@ pub mod object_type {
         }
     }
 
-    impl TdfSerialize for ObjectType {
-        fn serialize(&self, w: &mut TdfSerializer) {
-            w.write_u16(self.component);
-            w.write_u16(self.ty);
-        }
-    }
-
     impl TdfDeserializeOwned for ObjectType {
         fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
             let component = r.read_u16()?;
             let ty = r.read_u16()?;
             Ok(Self { component, ty })
+        }
+    }
+
+    impl TdfSerialize for ObjectType {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            w.write_u16(self.component);
+            w.write_u16(self.ty);
         }
     }
 
@@ -1046,18 +1047,18 @@ pub mod object_id {
         }
     }
 
-    impl TdfSerialize for ObjectId {
-        fn serialize(&self, w: &mut TdfSerializer) {
-            self.ty.serialize(w);
-            w.write_u64(self.id);
-        }
-    }
-
     impl TdfDeserializeOwned for ObjectId {
         fn deserialize_owned(r: &mut TdfReader) -> DecodeResult<Self> {
             let ty = ObjectType::deserialize_owned(r)?;
             let id = r.read_u64()?;
             Ok(Self { ty, id })
+        }
+    }
+
+    impl TdfSerialize for ObjectId {
+        fn serialize(&self, w: &mut TdfSerializer) {
+            self.ty.serialize(w);
+            w.write_u64(self.id);
         }
     }
 
@@ -1104,5 +1105,42 @@ pub mod object_id {
 
             assert_eq!(&r.buffer, expected)
         }
+    }
+}
+
+pub mod u12 {
+    use crate::{
+        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+    };
+
+    /// [U12] The type/name for this structure is not yet known
+    /// but is represented using 8 bytes of data and a string value
+    pub struct U12<'de> {
+        /// The leading byte value (Encoding not yet known)
+        pub data: [u8; 8],
+        /// Associated string value
+        pub value: &'de str,
+    }
+
+    impl<'de> TdfDeserialize<'de> for U12<'de> {
+        fn deserialize(r: &mut TdfReader<'de>) -> DecodeResult<Self> {
+            let data: [u8; 8] = r.read_bytes()?;
+            let value: &str = r.read_str()?;
+            Ok(Self { data, value })
+        }
+    }
+
+    impl TdfSerialize for U12<'_> {
+        fn serialize(&self, w: &mut crate::writer::TdfSerializer) {
+            w.write_slice(&self.data);
+            w.write_str(self.value);
+        }
+    }
+
+    impl TdfTyped for U12<'_> {
+        const TYPE: TdfType = TdfType::U12;
     }
 }
