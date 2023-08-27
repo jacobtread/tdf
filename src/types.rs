@@ -16,16 +16,10 @@ use std::fmt::Debug;
 use std::{slice, vec};
 
 /// List of Var ints
-#[derive(Debug, PartialEq, Eq)]
-pub struct VarIntList<T>(pub Vec<T>);
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct VarIntList(pub Vec<u64>);
 
-impl<T> Default for VarIntList<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> VarIntList<T> {
+impl VarIntList {
     /// Creates a new VarIntList
     pub fn new() -> Self {
         Self(Vec::new())
@@ -44,61 +38,39 @@ impl<T> VarIntList<T> {
         Self(Vec::with_capacity(capacity))
     }
 
-    /// Pushes a new value into the underlying list
-    ///
-    /// `value` The value to push
-    pub fn push(&mut self, value: impl Into<T>) {
-        self.0.push(value.into())
-    }
-
-    /// Removes the value at the provided index and returns
-    /// the value stored at it if there is one
-    ///
-    /// `index` The index to remove
-    pub fn remove(&mut self, index: usize) -> Option<T> {
-        if index < self.0.len() {
-            Some(self.0.remove(index))
-        } else {
-            None
-        }
-    }
-
-    /// Retrieves the value at the provided index returning
-    /// a borrow if one is there
-    ///
-    /// `index` The index to get the value at
-    pub fn get(&mut self, index: usize) -> Option<&T> {
-        self.0.get(index)
+    pub fn into_inner(self) -> Vec<u64> {
+        self.0
     }
 }
 
-impl<C> TdfSerialize for VarIntList<C>
-where
-    C: VarInt,
-{
+impl AsRef<[u64]> for VarIntList {
+    fn as_ref(&self) -> &[u64] {
+        self.0.as_ref()
+    }
+}
+
+impl TdfSerialize for VarIntList {
     fn serialize(&self, output: &mut TdfWriter) {
         output.write_usize(self.0.len());
-        for value in &self.0 {
-            value.serialize(output);
-        }
+        self.0
+            .iter()
+            .copied()
+            .for_each(|value| output.write_u64(value));
     }
 }
 
-impl<C> TdfDeserialize<'_> for VarIntList<C>
-where
-    C: VarInt,
-{
-    fn deserialize(reader: &mut TdfReader) -> DecodeResult<Self> {
+impl TdfDeserializeOwned for VarIntList {
+    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
         let length = reader.read_usize()?;
         let mut out = Vec::with_capacity(length);
         for _ in 0..length {
-            out.push(C::deserialize(reader)?);
+            out.push(reader.read_u64()?);
         }
         Ok(VarIntList(out))
     }
 }
 
-impl<T> TdfTyped for VarIntList<T> {
+impl TdfTyped for VarIntList {
     const TYPE: TdfType = TdfType::VarIntList;
 }
 
