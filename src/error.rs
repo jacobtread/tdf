@@ -2,7 +2,7 @@
 //! type alias [`DecodeResult`]
 
 use super::tag::{Tag, TdfType};
-use std::{error::Error, fmt::Display, str::Utf8Error, string::FromUtf8Error};
+use std::{error::Error, fmt::Display, str::Utf8Error};
 
 /// Error type for errors that can occur while decoding a value
 /// using the tdf decode
