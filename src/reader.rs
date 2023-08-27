@@ -6,7 +6,7 @@ use super::{
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
 };
-use crate::types::{map::deserialize_map_header, Blob, TaggedUnion, TdfMap};
+use crate::types::{map::deserialize_map_header, Blob, ObjectId, ObjectType, TaggedUnion, TdfMap};
 
 /// Buffered readable implementation. Allows reading through the
 /// underlying slice using a cursor and with a position that can
@@ -522,17 +522,12 @@ impl<'de> TdfDeserializer<'de> {
                 out.push(']');
             }
             TdfType::ObjectType => {
-                let a = usize::deserialize_owned(self)?;
-                let b = usize::deserialize_owned(self)?;
-
-                out.push_str(&format!("ObjectType({}, {})", a, b))
+                let value = ObjectType::deserialize_owned(self)?;
+                out.push_str(&format!("{:?}", value));
             }
             TdfType::ObjectId => {
-                let a = usize::deserialize_owned(self)?;
-                let b = usize::deserialize_owned(self)?;
-                let c = usize::deserialize_owned(self)?;
-
-                out.push_str(&format!("ObjectId({}, {}, {})", a, b, c))
+                let value = ObjectId::deserialize_owned(self)?;
+                out.push_str(&format!("{:?}", value));
             }
             TdfType::Float => {
                 let value = f32::deserialize_owned(self)?;
