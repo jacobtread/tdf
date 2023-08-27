@@ -18,6 +18,15 @@ pub mod var_int {
         writer::TdfSerializer,
     };
 
+    /// Skips amy un-read bytes from a variable-length integer
+    pub fn skip_var_int(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        let mut byte = r.read_byte()?;
+        while byte >= 0x80 {
+            byte = r.read_byte()?;
+        }
+        Ok(())
+    }
+
     /// Macro for implementing variable-length integer serialization
     /// for a specific integer type
     ///
@@ -425,6 +434,11 @@ pub mod blob {
         }
     }
 
+    pub fn skip_blob(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        let length: usize = usize::deserialize_owned(r)?;
+        r.skip_length(length)
+    }
+
     impl<'de> TdfDeserialize<'de> for Blob<'de> {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let bytes = Self::deserialize_raw(r)?;
@@ -452,6 +466,15 @@ pub mod list {
         tag::TdfType,
         writer::TdfSerializer,
     };
+
+    pub fn skip_list(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        let ty: TdfType = TdfType::deserialize_owned(r)?;
+        let length: usize = usize::deserialize_owned(r)?;
+        for _ in 0..length {
+            r.skip_type(&ty)?;
+        }
+        Ok(())
+    }
 
     impl<'de, C> TdfDeserialize<'de> for Vec<C>
     where
@@ -832,6 +855,15 @@ pub mod map {
         Ok((key_type, value_type, length))
     }
 
+    pub fn skip_map(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        let (key_ty, value_ty, length) = deserialize_map_header(r)?;
+        for _ in 0..length {
+            r.skip_type(&key_ty)?;
+            r.skip_type(&value_ty)?;
+        }
+        Ok(())
+    }
+
     impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
     where
         K: TdfDeserialize<'de> + TdfTyped + Ord,
@@ -938,6 +970,14 @@ pub mod tagged_union {
         const TYPE: TdfType = TdfType::TaggedUnion;
     }
 
+    pub fn skip_tagged_union(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        let ty = r.read_byte()?;
+        if ty != TaggedUnion::<()>::UNSET_KEY {
+            r.skip()?;
+        }
+        Ok(())
+    }
+
     impl<'de, Value> TdfDeserialize<'de> for TaggedUnion<Value>
     where
         Value: TdfDeserialize<'de> + TdfTyped,
@@ -992,6 +1032,8 @@ pub mod var_int_list {
         writer::TdfSerializer,
     };
 
+    use super::var_int::skip_var_int;
+
     /// Wrapper type for a list of variable-length integers.
     /// Represented using a Vec of u64 values
     #[derive(Debug, PartialEq, Eq, Default, Clone)]
@@ -1007,6 +1049,14 @@ pub mod var_int_list {
         /// Vec storing the variable-length integer values
         pub fn into_inner(self) -> Vec<u64> {
             self.0
+        }
+
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            let length: usize = usize::deserialize_owned(r)?;
+            for _ in 0..length {
+                skip_var_int(r)?;
+            }
+            Ok(())
         }
     }
 
@@ -1057,6 +1107,8 @@ pub mod object_type {
         writer::TdfSerializer,
     };
 
+    use super::var_int::skip_var_int;
+
     /// [ObjectType] structure represents a type of object
     /// within the blaze system, this type consists of a
     /// component value and a type value
@@ -1072,6 +1124,11 @@ pub mod object_type {
         /// Create a new [ObjectType] from its component and type
         pub fn new(component: u16, ty: u16) -> Self {
             Self { component, ty }
+        }
+
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            skip_var_int(r)?;
+            skip_var_int(r)
         }
     }
 
@@ -1131,7 +1188,7 @@ pub mod object_type {
 }
 
 pub mod object_id {
-    use super::object_type::ObjectType;
+    use super::{object_type::ObjectType, var_int::skip_var_int};
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::DecodeResult,
@@ -1162,6 +1219,11 @@ pub mod object_id {
                 ty: ObjectType { component, ty },
                 id,
             }
+        }
+
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            ObjectType::skip(r)?;
+            skip_var_int(r)
         }
     }
 
@@ -1235,6 +1297,12 @@ pub mod float {
         tag::TdfType,
         writer::TdfSerializer,
     };
+
+    /// Skips the 4 bytes required for a 32 bit float value
+    #[inline]
+    pub fn skip_f32(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        r.skip_length(4)
+    }
 
     impl TdfDeserializeOwned for f32 {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {

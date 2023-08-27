@@ -6,7 +6,15 @@ use super::{
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
 };
-use crate::types::{map::deserialize_map_header, Blob, ObjectId, ObjectType, TaggedUnion, TdfMap};
+use crate::types::{
+    blob::skip_blob,
+    float::skip_f32,
+    list::skip_list,
+    map::{deserialize_map_header, skip_map},
+    tagged_union::skip_tagged_union,
+    var_int::skip_var_int,
+    Blob, ObjectId, ObjectType, TaggedUnion, VarIntList,
+};
 
 /// Buffered readable implementation. Allows reading through the
 /// underlying slice using a cursor and with a position that can
@@ -196,27 +204,11 @@ impl<'de> TdfDeserializer<'de> {
         }
     }
 
-    /// Skips the 4 bytes required for a 32 bit float value
-    pub fn skip_f32(&mut self) -> DecodeResult<()> {
-        self.expect_length(4)?;
-        self.cursor += 4;
-        Ok(())
-    }
-
-    /// Skips the next string value
-    pub fn skip_blob(&mut self) -> DecodeResult<()> {
-        let length: usize = usize::deserialize_owned(self)?;
+    /// Skips the provided length in bytes on the underlying
+    /// buffer returning an error if there is not enough space
+    pub fn skip_length(&mut self, length: usize) -> DecodeResult<()> {
         self.expect_length(length)?;
         self.cursor += length;
-        Ok(())
-    }
-
-    /// Skips the next var int value
-    pub fn skip_var_int(&mut self) -> DecodeResult<()> {
-        let mut byte = self.read_byte()?;
-        while byte >= 0x80 {
-            byte = self.read_byte()?;
-        }
         Ok(())
     }
 
@@ -244,44 +236,6 @@ impl<'de> TdfDeserializer<'de> {
         Ok(())
     }
 
-    /// Skips a list of items
-    pub fn skip_list(&mut self) -> DecodeResult<()> {
-        let ty: TdfType = TdfType::deserialize_owned(self)?;
-        let length: usize = usize::deserialize_owned(self)?;
-        for _ in 0..length {
-            self.skip_type(&ty)?;
-        }
-        Ok(())
-    }
-
-    /// Skips a map
-    pub fn skip_map(&mut self) -> DecodeResult<()> {
-        let (key_ty, value_ty, length) = deserialize_map_header(self)?;
-        for _ in 0..length {
-            self.skip_type(&key_ty)?;
-            self.skip_type(&value_ty)?;
-        }
-        Ok(())
-    }
-
-    /// Skips a union value
-    pub fn skip_union(&mut self) -> DecodeResult<()> {
-        let ty = self.read_byte()?;
-        if ty != TaggedUnion::<()>::UNSET_KEY {
-            self.skip()?;
-        }
-        Ok(())
-    }
-
-    /// Skips a var int list
-    pub fn skip_var_int_list(&mut self) -> DecodeResult<()> {
-        let length: usize = usize::deserialize_owned(self)?;
-        for _ in 0..length {
-            self.skip_var_int()?;
-        }
-        Ok(())
-    }
-
     /// Skips the next tag value
     pub fn skip(&mut self) -> DecodeResult<()> {
         let tag = Tagged::deserialize_owned(self)?;
@@ -293,35 +247,24 @@ impl<'de> TdfDeserializer<'de> {
     /// `ty` The type of data to skip
     pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
         match ty {
-            TdfType::VarInt => self.skip_var_int()?,
-            TdfType::String | TdfType::Blob => self.skip_blob()?,
+            TdfType::VarInt => skip_var_int(self)?,
+            TdfType::String | TdfType::Blob => skip_blob(self)?,
             TdfType::Group => self.skip_group()?,
-            TdfType::List => self.skip_list()?,
-            TdfType::Map => self.skip_map()?,
-            TdfType::TaggedUnion => self.skip_union()?,
-            TdfType::VarIntList => self.skip_var_int_list()?,
-            TdfType::ObjectType => {
-                self.skip_var_int()?;
-                self.skip_var_int()?;
-            }
-            TdfType::ObjectId => {
-                self.skip_var_int()?;
-                self.skip_var_int()?;
-                self.skip_var_int()?;
-            }
-            TdfType::Float => self.skip_f32()?,
+            TdfType::List => skip_list(self)?,
+            TdfType::Map => skip_map(self)?,
+            TdfType::TaggedUnion => skip_tagged_union(self)?,
+            TdfType::VarIntList => VarIntList::skip(self)?,
+            TdfType::ObjectType => ObjectType::skip(self)?,
+            TdfType::ObjectId => ObjectId::skip(self)?,
+            TdfType::Float => skip_f32(self)?,
             TdfType::U12 => {
-                self.read_slice(8)?;
-                self.skip_blob()?; // string
+                self.skip_length(8)?;
+                skip_blob(self)?; // string
             }
         }
         Ok(())
     }
 
-    /// Decodes all the contents within the reader into a string
-    /// representation
-    ///
-    /// `out` The string output to append to
     pub fn stringify(&mut self, out: &mut String) -> DecodeResult<()> {
         while self.cursor < self.buffer.len() {
             if let Err(err) = self.stringify_tag(out, 1) {
@@ -338,11 +281,6 @@ impl<'de> TdfDeserializer<'de> {
         Ok(())
     }
 
-    /// Decodes and converts the next tag into
-    /// a string representation
-    ///
-    /// `out`    The string output to append to
-    /// `indent` The current indent level
     pub fn stringify_tag(&mut self, out: &mut String, indent: usize) -> DecodeResult<()> {
         let tag = Tagged::deserialize_owned(self)?;
         out.push_str(&"  ".repeat(indent));
@@ -359,12 +297,6 @@ impl<'de> TdfDeserializer<'de> {
         }
     }
 
-    /// Decodes and converts the next value of the provided type
-    /// into a string representation
-    ///
-    /// `out`    The string output to append to
-    /// `indent` The current indent level
-    /// `ty`     The type
     pub fn stringify_type(
         &mut self,
         out: &mut String,
@@ -515,12 +447,6 @@ impl<'de> TdfDeserializer<'de> {
         Ok(())
     }
 
-    /// Reads until the next list values selection for the provided
-    /// tag. Will read the value type and the length returning
-    /// the length.
-    ///
-    /// `tag`        The tag to read
-    /// `value_type` The expected value type
     pub fn until_list(&mut self, tag: &[u8], value_type: TdfType) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::List)?;
         let list_type = TdfType::deserialize_owned(self)?;
@@ -534,13 +460,6 @@ impl<'de> TdfDeserializer<'de> {
         Ok(count)
     }
 
-    /// Reads until the next map values selection for the provided
-    /// tag. Will read the key value types and the length returning
-    /// the length.
-    ///
-    /// `tag`        The tag to read
-    /// `key_type`   The expected key type
-    /// `value_type` The expected value type
     pub fn until_map(
         &mut self,
         tag: &[u8],
@@ -566,22 +485,5 @@ impl<'de> TdfDeserializer<'de> {
         }
 
         Ok(length)
-    }
-}
-
-/// Majority of reading tests are merged into the writing tests
-#[cfg(test)]
-mod test {
-    use super::TdfDeserializer;
-
-    /// Tests reading a byte from the reader
-    #[test]
-    fn test_read_byte() {
-        for value in 0..255 {
-            let buffer = &[value];
-            let mut reader = TdfDeserializer::new(buffer);
-            let read_value = reader.read_byte().unwrap();
-            assert_eq!(value, read_value);
-        }
     }
 }
