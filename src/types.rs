@@ -7,13 +7,15 @@ use super::{
     codec::{TdfDeserialize, TdfSerialize, TdfTyped},
     error::{DecodeError, DecodeResult},
     reader::TdfReader,
-    tag::{Tag, TdfType},
+    tag::TdfType,
     writer::TdfSerializer,
 };
-use std::borrow::Borrow;
-use std::collections::HashMap;
+
 use std::fmt::Debug;
-use std::{slice, vec};
+
+pub use map::TdfMap;
+pub use tagged_union::TaggedUnion;
+pub use var_int_list::VarIntList;
 
 pub mod var_int_list {
     use crate::{
@@ -77,7 +79,7 @@ pub mod var_int_list {
     }
 }
 
-mod tagged_union {
+pub mod tagged_union {
     use crate::{
         codec::{TdfDeserialize, TdfSerialize, TdfTyped},
         error::{DecodeError, DecodeResult},
@@ -177,7 +179,7 @@ mod tagged_union {
     }
 }
 
-mod map {
+pub mod map {
     use std::{
         borrow::Borrow,
         fmt::Debug,
@@ -521,7 +523,7 @@ mod map {
     }
 }
 
-mod float {
+pub mod float {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
@@ -549,7 +551,7 @@ mod float {
     }
 }
 
-mod var_int {
+pub mod var_int {
     use crate::{
         codec::{TdfDeserializeOwned, TdfSerialize, TdfTyped},
         error::DecodeResult,
@@ -777,33 +779,51 @@ mod var_int {
     }
 }
 
-impl TdfSerialize for &str {
-    #[inline]
-    fn serialize(&self, output: &mut TdfSerializer) {
-        output.write_str(self)
+pub mod string {
+    use crate::{
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::DecodeResult,
+        reader::TdfReader,
+        tag::TdfType,
+        writer::TdfSerializer,
+    };
+
+    // str slice types
+
+    impl<'de> TdfDeserialize<'de> for &'de str {
+        fn deserialize(r: &mut crate::reader::TdfReader<'de>) -> DecodeResult<Self> {}
     }
-}
 
-impl TdfTyped for &str {
-    const TYPE: TdfType = TdfType::String;
-}
-
-impl TdfSerialize for String {
-    #[inline]
-    fn serialize(&self, output: &mut TdfSerializer) {
-        output.write_str(self);
+    impl TdfSerialize for &str {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_str(self)
+        }
     }
-}
 
-impl TdfDeserializeOwned for String {
-    #[inline]
-    fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.read_string()
+    impl TdfTyped for &str {
+        const TYPE: TdfType = TdfType::String;
     }
-}
 
-impl TdfTyped for String {
-    const TYPE: TdfType = TdfType::String;
+    // Owned String types
+
+    impl TdfDeserializeOwned for String {
+        #[inline]
+        fn deserialize_owned(reader: &mut TdfReader) -> DecodeResult<Self> {
+            reader.read_string()
+        }
+    }
+
+    impl TdfSerialize for String {
+        #[inline]
+        fn serialize(&self, output: &mut TdfSerializer) {
+            output.write_str(self);
+        }
+    }
+
+    impl TdfTyped for String {
+        const TYPE: TdfType = TdfType::String;
+    }
 }
 
 /// Blob structure wrapping a vec of bytes. This implementation is

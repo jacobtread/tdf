@@ -1,10 +1,11 @@
 //! Writer buffer implementation for writing different kinds of tdf values
 //! to byte form without creating a new structure [`TdfWriter`]
 
+use crate::types::TaggedUnion;
+
 use super::{
     codec::{TdfSerialize, TdfTyped},
     tag::TdfType,
-    types::UNION_UNSET,
 };
 
 /// Writer implementation for writing values to an underlying buffer
@@ -260,7 +261,7 @@ impl TdfSerializer {
     ///
     /// `tag` The tag to write
     pub fn tag_union_unset(&mut self, tag: &[u8]) {
-        self.tag_union_start(tag, UNION_UNSET);
+        self.tag_union_start(tag, TaggedUnion::UNSET_KEY);
     }
 
     /// Writes a tag and its value where the value implements ValueType
@@ -461,7 +462,7 @@ impl From<TdfSerializer> for Vec<u8> {
 #[cfg(test)]
 mod test {
     use super::TdfSerializer;
-    use crate::{codec::TdfSerialize, reader::TdfReader, tag::TdfType, types::UNION_UNSET};
+    use crate::{codec::TdfSerialize, reader::TdfReader, tag::TdfType, types::TaggedUnion};
 
     /// Test for ensuring some common tags of different
     /// length are encoded to the correct values. The tags
@@ -733,7 +734,7 @@ mod test {
         writer.tag_union_unset(b"TEST");
         assert_eq!(writer.buffer.len(), 5);
         assert_eq!(writer.buffer[3], TdfType::Union as u8);
-        assert_eq!(writer.buffer[4], UNION_UNSET);
+        assert_eq!(writer.buffer[4], TaggedUnion::UNSET_KEY);
         writer.clear();
 
         writer.tag_union_value(b"TEST", 5, b"TEST2", &15);

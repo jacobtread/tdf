@@ -1,11 +1,12 @@
 //! Buffer reading wrapper to provided a way to easily read data from
 //! packet buffers provides easy functions for all the different tdf types
 
+use crate::types::{TaggedUnion, TdfMap};
+
 use super::{
     codec::{TdfDeserialize, TdfTyped},
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
-    types::{TdfMap, UNION_UNSET},
 };
 use std::borrow::Cow;
 
@@ -455,7 +456,7 @@ impl<'de> TdfReader<'de> {
     /// Skips a union value
     pub fn skip_union(&mut self) -> DecodeResult<()> {
         let ty = self.read_byte()?;
-        if ty != UNION_UNSET {
+        if ty != TaggedUnion::UNSET_KEY {
             self.skip()?;
         }
         Ok(())
@@ -665,7 +666,7 @@ impl<'de> TdfReader<'de> {
             }
             TdfType::Union => {
                 let ty = self.read_byte()?;
-                if ty == UNION_UNSET {
+                if ty == TaggedUnion::UNSET_KEY {
                     out.push_str("Union(Unset)")
                 } else {
                     let tag = self.read_tag()?;
