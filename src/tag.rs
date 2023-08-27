@@ -56,29 +56,17 @@ impl Display for Tag {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 pub enum TdfType {
-    /// Variable length integer value
     VarInt = 0x0,
-    /// Strings
     String = 0x1,
-    /// List of bytes
     Blob = 0x2,
-    /// Group of tags
     Group = 0x3,
-    /// List of any of the previously mentioned
     List = 0x4,
-    /// Map of TdfType to TdfType
     Map = 0x5,
-    /// Union of value where with unset type
     TaggedUnion = 0x6,
-    /// List of variable length integers
     VarIntList = 0x7,
-    /// Pair of two var int values
     ObjectType = 0x8,
-    /// Three var int values
     ObjectId = 0x9,
-    /// f32 value
     Float = 0xA,
-    // Not yet properly decoded
     U12 = 0xC,
 }
 
