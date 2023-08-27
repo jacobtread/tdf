@@ -315,18 +315,15 @@ pub mod var_int {
 }
 
 pub mod string {
-    use std::borrow::Cow;
-
+    use super::Blob;
     use crate::{
         codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped},
         error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
-        serialize,
         tag::TdfType,
         writer::TdfSerializer,
     };
-
-    use super::Blob;
+    use std::borrow::Cow;
 
     // str slice types
 
@@ -514,8 +511,8 @@ pub mod map {
     };
 
     use crate::{
-        codec::{TdfDeserialize, TdfSerialize, TdfTyped},
-        error::DecodeResult,
+        codec::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped},
+        error::{DecodeError, DecodeResult},
         reader::TdfDeserializer,
         tag::TdfType,
         writer::TdfSerializer,
@@ -826,14 +823,43 @@ pub mod map {
         }
     }
 
+    pub fn deserialize_map_header(
+        r: &mut TdfDeserializer,
+    ) -> DecodeResult<(TdfType, TdfType, usize)> {
+        let key_type: TdfType = TdfType::deserialize_owned(r)?;
+        let value_type: TdfType = TdfType::deserialize_owned(r)?;
+        let length = usize::deserialize_owned(r)?;
+        Ok((key_type, value_type, length))
+    }
+
     impl<'de, K, V> TdfDeserialize<'de> for TdfMap<K, V>
     where
         K: TdfDeserialize<'de> + TdfTyped + Ord,
         V: TdfDeserialize<'de> + TdfTyped,
     {
-        #[inline]
-        fn deserialize(reader: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            reader.read_map()
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+            let (key_ty, value_ty, length) = deserialize_map_header(r)?;
+
+            if key_ty != K::TYPE {
+                return Err(DecodeError::InvalidType {
+                    expected: K::TYPE,
+                    actual: key_ty,
+                });
+            }
+            if value_ty != V::TYPE {
+                return Err(DecodeError::InvalidType {
+                    expected: V::TYPE,
+                    actual: value_ty,
+                });
+            }
+
+            let mut map: TdfMap<K, V> = TdfMap::with_capacity(length);
+            for _ in 0..length {
+                let key: K = K::deserialize(r)?;
+                let value: V = V::deserialize(r)?;
+                map.insert(key, value);
+            }
+            Ok(map)
         }
     }
 

@@ -1,5 +1,7 @@
 //! Implementation for [`Tag`]s and [`TdfType`]s
 
+use crate::{codec::TdfDeserializeOwned, error::DecodeResult, reader::TdfDeserializer};
+
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};
 
@@ -88,5 +90,12 @@ impl TryFrom<u8> for TdfType {
             0xC => TdfType::U12,
             ty => return Err(DecodeError::UnknownType { ty }),
         })
+    }
+}
+
+impl TdfDeserializeOwned for TdfType {
+    fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+        let value = r.read_byte()?;
+        TdfType::try_from(value)
     }
 }

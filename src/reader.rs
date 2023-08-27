@@ -6,7 +6,7 @@ use super::{
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
 };
-use crate::types::{Blob, TaggedUnion, TdfMap};
+use crate::types::{map::deserialize_map_header, Blob, TaggedUnion, TdfMap};
 
 /// Buffered readable implementation. Allows reading through the
 /// underlying slice using a cursor and with a position that can
@@ -53,24 +53,10 @@ impl<'de> TdfDeserializer<'de> {
     ///
     /// `length` The length of the slice to take
     pub fn read_slice(&mut self, length: usize) -> DecodeResult<&'de [u8]> {
-        // Ensure we have the required number of bytes
-        if self.cursor + length > self.buffer.len() {
-            return Err(DecodeError::UnexpectedEof {
-                cursor: self.cursor,
-                wanted: length,
-                remaining: self.len(),
-            });
-        }
+        self.expect_length(length)?;
         let slice: &[u8] = &self.buffer[self.cursor..self.cursor + length];
         self.cursor += length;
         Ok(slice)
-    }
-
-    /// Takes a float value from the buffer which moves the
-    /// cursor over by 4 bytes
-    pub fn read_f32(&mut self) -> DecodeResult<f32> {
-        let bytes: [u8; 4] = self.read_bytes()?;
-        Ok(f32::from_be_bytes(bytes))
     }
 
     /// Attempts to ensure the next length exists past the cursor
@@ -97,62 +83,6 @@ impl<'de> TdfDeserializer<'de> {
     /// Returns if there is nothing left after the cursor
     pub fn is_empty(&self) -> bool {
         self.cursor >= self.buffer.len()
-    }
-
-    /// Reads a map from the underlying buffer
-    pub fn read_map<K, V>(&mut self) -> DecodeResult<TdfMap<K, V>>
-    where
-        K: TdfDeserialize<'de> + TdfTyped + Ord,
-        V: TdfDeserialize<'de> + TdfTyped,
-    {
-        let length: usize = self.read_map_header(K::TYPE, V::TYPE)?;
-        self.read_map_body(length)
-    }
-
-    /// Reads a map header from the underlying buffer ensuring that the key
-    /// and value types match the provided key and value types. Returns
-    /// the length of the following content
-    ///
-    /// `exp_key_type`   The type of key to expect
-    /// `exp_value_type` The type of value to expect
-    pub fn read_map_header(
-        &mut self,
-        exp_key_type: TdfType,
-        exp_value_type: TdfType,
-    ) -> DecodeResult<usize> {
-        let key_type: TdfType = self.read_type()?;
-        if key_type != exp_key_type {
-            return Err(DecodeError::InvalidType {
-                expected: exp_key_type,
-                actual: key_type,
-            });
-        }
-        let value_type: TdfType = self.read_type()?;
-        if value_type != exp_value_type {
-            return Err(DecodeError::InvalidType {
-                expected: exp_value_type,
-                actual: value_type,
-            });
-        }
-        usize::deserialize_owned(self)
-    }
-
-    /// Reads the contents of the map for the provided key value types
-    /// and for the provided length
-    ///
-    /// `length` The length of the map (The number of entries)
-    pub fn read_map_body<K, V>(&mut self, length: usize) -> DecodeResult<TdfMap<K, V>>
-    where
-        K: TdfDeserialize<'de> + Ord,
-        V: TdfDeserialize<'de>,
-    {
-        let mut map: TdfMap<K, V> = TdfMap::with_capacity(length);
-        for _ in 0..length {
-            let key: K = K::deserialize(self)?;
-            let value: V = V::deserialize(self)?;
-            map.insert(key, value);
-        }
-        Ok(map)
     }
 
     /// Decodes tags from the reader until the tag with the provided tag name
@@ -250,17 +180,11 @@ impl<'de> TdfDeserializer<'de> {
         }
     }
 
-    /// Reads the next TdfType value after the cursor
-    pub fn read_type(&mut self) -> DecodeResult<TdfType> {
-        let value = self.read_byte()?;
-        TdfType::try_from(value)
-    }
-
     /// Reads the next TdfType value checking that it
     /// matches the provided type and returns an invalid
     /// type error if the type doesn't match
     pub fn expect_type(&mut self, ty: TdfType) -> DecodeResult<()> {
-        let value_type = self.read_type()?;
+        let value_type = TdfType::deserialize_owned(self)?;
 
         if value_type != ty {
             Err(DecodeError::InvalidType {
@@ -350,7 +274,7 @@ impl<'de> TdfDeserializer<'de> {
 
     /// Skips a list of items
     pub fn skip_list(&mut self) -> DecodeResult<()> {
-        let ty: TdfType = self.read_type()?;
+        let ty: TdfType = TdfType::deserialize_owned(self)?;
         let length: usize = usize::deserialize_owned(self)?;
         for _ in 0..length {
             self.skip_type(&ty)?;
@@ -360,9 +284,7 @@ impl<'de> TdfDeserializer<'de> {
 
     /// Skips a map
     pub fn skip_map(&mut self) -> DecodeResult<()> {
-        let key_ty: TdfType = self.read_type()?;
-        let value_ty: TdfType = self.read_type()?;
-        let length: usize = usize::deserialize_owned(self)?;
+        let (key_ty, value_ty, length) = deserialize_map_header(self)?;
         for _ in 0..length {
             self.skip_type(&key_ty)?;
             self.skip_type(&value_ty)?;
@@ -522,7 +444,7 @@ impl<'de> TdfDeserializer<'de> {
                 }
             }
             TdfType::List => {
-                let value_type: TdfType = self.read_type()?;
+                let value_type: TdfType = TdfType::deserialize_owned(self)?;
                 let length: usize = usize::deserialize_owned(self)?;
                 let expand = matches!(value_type, TdfType::Map | TdfType::Group);
                 out.push('[');
@@ -548,13 +470,8 @@ impl<'de> TdfDeserializer<'de> {
                 out.push(']');
             }
             TdfType::Map => {
-                let key_type: TdfType = self.read_type()?;
-                let value_type: TdfType = self.read_type()?;
-                let length: usize = usize::deserialize_owned(self)?;
-                out.push_str(&format!(
-                    "Map<{:?}, {:?}, {}>",
-                    key_type, value_type, length
-                ));
+                let (key_ty, value_ty, length) = deserialize_map_header(self)?;
+                out.push_str(&format!("Map<{:?}, {:?}, {}>", key_ty, value_ty, length));
                 out.push_str("{\n");
 
                 let start = self.cursor;
@@ -562,9 +479,9 @@ impl<'de> TdfDeserializer<'de> {
                 let mut proc = || -> DecodeResult<()> {
                     for i in 0..length {
                         out.push_str(&"  ".repeat(indent + 1));
-                        self.stringify_type(out, indent + 1, &key_type)?;
+                        self.stringify_type(out, indent + 1, &key_ty)?;
                         out.push_str(": ");
-                        self.stringify_type(out, indent + 1, &value_type)?;
+                        self.stringify_type(out, indent + 1, &value_ty)?;
                         if i < length - 1 {
                             out.push(',');
                         }
@@ -618,7 +535,7 @@ impl<'de> TdfDeserializer<'de> {
                 out.push_str(&format!("ObjectId({}, {}, {})", a, b, c))
             }
             TdfType::Float => {
-                let value = self.read_f32()?;
+                let value = f32::deserialize_owned(self)?;
                 out.push_str(&value.to_string());
             }
             TdfType::U12 => {
@@ -639,7 +556,7 @@ impl<'de> TdfDeserializer<'de> {
     /// `value_type` The expected value type
     pub fn until_list(&mut self, tag: &[u8], value_type: TdfType) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::List)?;
-        let list_type = self.read_type()?;
+        let list_type = TdfType::deserialize_owned(self)?;
         if list_type != value_type {
             return Err(DecodeError::InvalidType {
                 expected: value_type,
@@ -665,25 +582,23 @@ impl<'de> TdfDeserializer<'de> {
     ) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::Map)?;
 
-        let k_type = self.read_type()?;
-        let v_type = self.read_type()?;
+        let (key_ty, value_ty, length) = deserialize_map_header(self)?;
 
-        if k_type != key_type {
+        if key_ty != key_type {
             return Err(DecodeError::InvalidType {
                 expected: key_type,
-                actual: k_type,
+                actual: key_ty,
             });
         }
 
-        if v_type != value_type {
+        if value_ty != value_type {
             return Err(DecodeError::InvalidType {
                 expected: value_type,
-                actual: v_type,
+                actual: value_ty,
             });
         }
 
-        let count = usize::deserialize_owned(self)?;
-        Ok(count)
+        Ok(length)
     }
 }
 
