@@ -42,6 +42,21 @@
 //! not present in the buffer, see [try_tag](TdfDeserializer::try_tag) for tags
 //! that might not be present
 //!   
+//! ### Optional tag reading
+//!
+//! Sometimes tags aren't always present in the serialized message, to handle tags that might not
+//! always show up you can use the [try_tag](TdfDeserializer::try_tag) function
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! let my_value: Option<u32> = r.try_tag(b"TEST").unwrap();
+//!
+//! ```
+//!
 //! ### Group reading
 //!
 //! To read within groups yo can use the [group](TdfDeserializer::group) function
@@ -103,21 +118,6 @@
 //!     Ok(())
 //! })
 //! .unwrap();
-//! ```
-//!
-//! ### Optional tag reading
-//!
-//! Sometimes tags aren't always present in the serialized message, to handle tags that might not
-//! always show up you can use the [try_tag](TdfDeserializer::try_tag) function
-//!
-//! ```
-//! use tdf::reader::TdfDeserializer;
-//!
-//! let buffer = &[/* Example byte slice buffer */];
-//! let mut r = TdfDeserializer::new(buffer);
-//!
-//! let my_value: Option<u32> = r.try_tag(b"TEST").unwrap();
-//!
 //! ```
 //!
 //! ## Complex Reading
@@ -232,6 +232,8 @@ use crate::{
     types::{group::GroupSlice, map::deserialize_map_header},
 };
 
+/// [TdfDeserializer] provides functions for reading tag values from a buffer.
+/// See [module documentation](crate::reader) for usage
 pub struct TdfDeserializer<'de> {
     /// Buffer storing the bytes to be deserialized
     pub(crate) buffer: &'de [u8],
@@ -242,6 +244,7 @@ pub struct TdfDeserializer<'de> {
 }
 
 impl<'de> TdfDeserializer<'de> {
+    /// Creates a new [TdfDeserializer] from the provided buffer
     pub fn new(buffer: &'de [u8]) -> Self {
         Self {
             buffer,
@@ -250,6 +253,29 @@ impl<'de> TdfDeserializer<'de> {
         }
     }
 
+    /// Deserializes tags until it finds the next that matches the
+    /// provided `tag` and `ty`. Will return a [DecodeError::MissingTag] if
+    /// the tag is not found.
+    ///
+    /// If you would like to handle tags that might not always exist use
+    /// [try_until_tag](TdfDeserializer::try_until_tag) instead.
+    ///
+    /// If this function completes successfully the cursor will be placed
+    /// just after the tag in preparation to read the value.
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// r.until_tag(b"TEST").unwrap();
+    /// /* Operate on TEST */
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
+    /// * ty - The type the tag expected to have (Type mismatch will cause an error)
     pub fn until_tag(&mut self, tag: RawTag, ty: TdfType) -> DecodeResult<()> {
         let tag = Tag::from(tag);
 
@@ -287,6 +313,33 @@ impl<'de> TdfDeserializer<'de> {
         Err(DecodeError::MissingTag { tag, ty })
     }
 
+    /// Deserializes tags until it finds the next that matches the
+    /// provided `tag` and `ty`. Will return whether the tag was found
+    ///
+    /// If you would instead like to read a tag that should always exist use
+    /// [until_tag](TdfDeserializer::until_tag) instead.
+    ///
+    /// If this function returns true the cursor will be placed
+    /// just after the tag in preparation to read the value.
+    ///
+    /// If this function returns false the buffer cursor will be reset
+    /// to where it was before this function was called
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// let exists = r.try_until_tag(b"BIN").unwrap();
+    /// if exists {
+    ///    /* Tag exists, operate on it */
+    /// }
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
+    /// * ty - The type the tag expected to have (Type mismatch will cause an error)
     pub fn try_until_tag(&mut self, tag: RawTag, ty: TdfType) -> DecodeResult<bool> {
         // Preserve initial state
         let start = self.cursor;
@@ -307,6 +360,23 @@ impl<'de> TdfDeserializer<'de> {
         Ok(exists)
     }
 
+    /// Attempts to find a tag and deserialize the provided `V` value
+    /// from the associated tag value. Returns the deserialized value
+    ///
+    /// Will return a [DecodeError::MissingTag] if the tag is not found.
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// let my_value: u32 = r.tag(b"TEST").unwrap();
+    ///
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
     pub fn tag<V>(&mut self, tag: RawTag) -> DecodeResult<V>
     where
         V: TdfDeserialize<'de> + TdfTyped,
@@ -315,6 +385,24 @@ impl<'de> TdfDeserializer<'de> {
         V::deserialize(self)
     }
 
+    /// Attempts to find a tag and deserialize the provided `V` value
+    /// from the associated tag value. Returns the desererialized value
+    ///
+    /// Will return [None] if the tag is not found and the cursor position
+    /// will be reset to where it was before this function was called
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// let my_value: Option<u32> = r.try_tag(b"TEST").unwrap();
+    ///
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
     pub fn try_tag<V>(&mut self, tag: RawTag) -> DecodeResult<Option<V>>
     where
         V: TdfDeserialize<'de> + TdfTyped,
@@ -330,6 +418,25 @@ impl<'de> TdfDeserializer<'de> {
 
     /// Attempts to find a group with the provided tag then runs the
     /// provided `action` on the group contents.
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// r.group(b"TEST", |_, r| {
+    ///     let tag: u32 = r.tag(b"INNR")?;
+    ///
+    ///     Ok(())
+    /// })
+    /// .unwrap();
+    ///
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
+    /// * action - The action to execute on the group
     #[inline]
     pub fn group<A, R>(&mut self, tag: RawTag, mut action: A) -> DecodeResult<R>
     where
