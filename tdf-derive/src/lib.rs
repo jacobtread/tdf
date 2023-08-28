@@ -192,12 +192,85 @@ fn derive_tdf_deserialize_enum(ident: Ident, attrs: Vec<Attribute>, data: DataEn
     }
 }
 
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
+struct TdfTaggedEnumVariantAttr {
+    pub key: Expr,
+    #[darling(default)]
+    pub default: bool,
+}
+
 fn derive_tdf_deserialize_tagged_enum(
     ident: Ident,
     attrs: Vec<Attribute>,
     data: DataEnum,
 ) -> TokenStream {
-    quote!().into()
+    let enum_attr = TdfEnumAttr::from_attributes(&attrs).unwrap();
+    let repr = enum_attr.repr;
+
+    let field_impls: Vec<_> = data
+        .variants
+        .into_iter()
+        .map(|variant| {
+            let attr: TdfTaggedEnumVariantAttr =
+                TdfTaggedEnumVariantAttr::from_attributes(&variant.attrs)
+                    .expect("Failed to parse tdf field attrs");
+
+            let var_ident = variant.ident;
+            let discriminant = attr.key;
+
+            match variant.fields {
+                syn::Fields::Named(fields) => {
+                    let mut field_idents: Vec<&Ident> = Vec::new();
+                    let field_impls: Vec<_> = fields
+                        .named
+                        .iter()
+                        .map(|field| {
+                            let attr: TdfFieldAttr = TdfFieldAttr::from_attributes(&field.attrs)
+                                .expect("Failed to parse tdf field attrs");
+
+                            let field_ident = field.ident.as_ref().unwrap();
+                            let field_ty = &field.ty;
+                            let tag = attr.tag;
+
+                            field_idents.push(field_ident);
+
+                            quote! {
+                                let #field_ident = r.tag::<#field_ty>(#tag)?;
+                            }
+                        })
+                        .collect();
+
+                    quote! {
+                        #discriminant => {
+                            #(#field_impls)*
+
+                            Self::#var_ident {
+                                #(#field_idents)*
+                            }
+                        },
+                    }
+                }
+                syn::Fields::Unnamed(_) => todo!(),
+                syn::Fields::Unit => quote! {
+                    #discriminant => Self::#var_ident,
+                },
+            }
+        })
+        .collect();
+
+    quote! {
+        impl TdfDeserialize<'_> for #ident {
+            fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+                let value = <#repr>::deserialize(r)?;
+                Ok(match value {
+                    #(#field_impls)*
+                    _ => return Err(tdf::DecodeError::Other("Missing fallback enum variant"))
+                })
+            }
+        }
+    }
+    .into()
 }
 
 #[derive(Debug, FromAttributes)]
