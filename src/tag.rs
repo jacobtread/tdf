@@ -34,6 +34,11 @@ pub struct Tagged {
 }
 
 impl Tagged {
+    pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+        let tag = Self::deserialize_owned(r)?;
+        tag.ty.skip(r)
+    }
+
     pub fn serialize_raw<S: TdfSerializer>(w: &mut S, tag: RawTag, value_type: TdfType) {
         let mut output: [u8; 4] = [0, 0, 0, value_type as u8];
         let length: usize = tag.len();

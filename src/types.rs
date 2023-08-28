@@ -1048,7 +1048,7 @@ pub mod tagged_union {
     pub fn skip_tagged_union(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let ty = r.read_byte()?;
         if ty != TAGGED_UNSET_KEY {
-            r.skip_tag()?;
+            Tagged::skip(r)?;
         }
         Ok(())
     }
@@ -1461,7 +1461,7 @@ pub mod u12 {
 }
 
 pub mod group {
-    use crate::{error::DecodeResult, reader::TdfDeserializer};
+    use crate::{error::DecodeResult, reader::TdfDeserializer, tag::Tagged};
 
     use super::TdfDeserialize;
 
@@ -1479,7 +1479,7 @@ pub mod group {
         pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
             let is_two = r.read_byte()? == 2;
             if !is_two {
-                r.move_cursor_back();
+                r.step_back();
             }
             Ok(is_two)
         }
@@ -1487,7 +1487,7 @@ pub mod group {
         pub fn deserialize_group_end(r: &mut TdfDeserializer) -> DecodeResult<bool> {
             let is_end = r.read_byte()? == 0;
             if !is_end {
-                r.move_cursor_back();
+                r.step_back();
             }
             Ok(is_end)
         }
@@ -1519,7 +1519,7 @@ pub mod group {
         pub fn deserialize_content_skip<'de>(
             r: &mut TdfDeserializer<'de>,
         ) -> DecodeResult<&'de [u8]> {
-            Self::deserialize_content(r, |r| r.skip_tag())
+            Self::deserialize_content(r, Tagged::skip)
         }
 
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {

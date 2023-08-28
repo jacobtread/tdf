@@ -476,6 +476,31 @@ impl<'de> TdfDeserializer<'de> {
         Ok(value)
     }
 
+    /// Attempts to find a list with the provided tag and deserialize
+    /// its header, returning the type and length of the list.
+    ///
+    /// This should be used when you want to manully deserialize a list
+    /// type. This function returns the list type rather than enforcing
+    /// it. If you would like the type to be enforced use the
+    /// [until_list_typed](TdfDeserializer::until_list_typed) function
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// let (value_ty, length): usize = r.until_list(b"LIST").unwrap();
+    ///
+    /// for i in 0..length {
+    ///     // Read complex items
+    /// }
+    ///
+    /// // Dont forget to read ALL of the items or an error will occur
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
     pub fn until_list(&mut self, tag: RawTag) -> DecodeResult<(TdfType, usize)> {
         self.until_tag(tag, TdfType::List)?;
         let list_type = TdfType::deserialize_owned(self)?;
@@ -483,6 +508,35 @@ impl<'de> TdfDeserializer<'de> {
         Ok((list_type, count))
     }
 
+    /// Attempts to find a list with the provided tag and deserialize
+    /// its header, returning the length of the list.
+    ///
+    /// This should be used when you want to manully deserialize a list
+    /// type. This function enforces the list type and will return a
+    /// [DecodeError::InvalidType] error if the type doesn't match.
+    /// If you would like to manually handle the type checking you can use
+    /// [until_list](TdfDeserializer::until_list) function
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    /// use tdf::tag::TdfType;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// // Specify the value types must be strings
+    /// let length: usize = r.until_list_typed(b"LIST", TdfType::String).unwrap();
+    ///
+    /// for i in 0..length {
+    ///     // Read complex items
+    /// }
+    ///
+    /// // Dont forget to read ALL of the items or an error will occur
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
+    /// * value_type - The type of value to enforce
     pub fn until_list_typed(&mut self, tag: RawTag, value_type: TdfType) -> DecodeResult<usize> {
         let (list_type, count) = self.until_list(tag)?;
         if list_type != value_type {
@@ -494,12 +548,69 @@ impl<'de> TdfDeserializer<'de> {
         Ok(count)
     }
 
+    /// Attempts to find a map with the provided tag and deserialize
+    /// its header, returning the key type, value type and length of the list.
+    ///
+    /// This should be used when you want to manully deserialize a map
+    /// type. This function returns the key value types rather than enforcing
+    /// it. If you would like the type to be enforced use the
+    /// [until_map_typed](TdfDeserializer::until_map_typed) function
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// let (key_ty, value_ty, length): usize = r.until_map(b"LIST").unwrap();
+    ///
+    /// for i in 0..length {
+    ///     // Read key
+    ///     // Read value
+    /// }
+    ///
+    /// // Dont forget to read ALL of the items or an error will occur
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
     #[inline]
     pub fn until_map(&mut self, tag: RawTag) -> DecodeResult<(TdfType, TdfType, usize)> {
         self.until_tag(tag, TdfType::Map)?;
         deserialize_map_header(self)
     }
 
+    /// Attempts to find a map with the provided tag and deserialize
+    /// its header, returning the length of the map.
+    ///
+    /// This should be used when you want to manully deserialize a map
+    /// type. This function enforces the map key value types and will return a
+    /// [DecodeError::InvalidType] error if the types dont match.
+    /// If you would like to manually handle the type checking you can use
+    /// [until_map](TdfDeserializer::until_map) function
+    ///
+    /// ```
+    /// use tdf::reader::TdfDeserializer;
+    /// use tdf::tag::TdfType;
+    ///
+    /// let buffer = &[/* Example byte slice buffer */];
+    /// let mut r = TdfDeserializer::new(buffer);
+    ///
+    /// // Specify the key value types must be strings
+    /// let length: usize = r.until_map_typed(b"LIST", TdfType::String, TdfType::String).unwrap();
+    ///
+    /// for i in 0..length {
+    ///     // Read key
+    ///     // Read value
+    /// }
+    ///
+    /// // Dont forget to read ALL of the items or an error will occur
+    /// ```
+    ///
+    /// # Arguments
+    /// * tag - The tag to find
+    /// * key_type - The type of key to enforce
+    /// * value_type - The type of value to enforce
     pub fn until_map_typed(
         &mut self,
         tag: RawTag,
@@ -526,36 +637,54 @@ impl<'de> TdfDeserializer<'de> {
         Ok((key_ty, value_ty, length))
     }
 
-    fn expect_length(&self, length: usize) -> DecodeResult<()> {
-        if self.cursor + length > self.buffer.len() {
-            Err(DecodeError::UnexpectedEof {
-                cursor: self.cursor,
-                wanted: length,
-                remaining: self.len(),
-            })
-        } else {
-            Ok(())
-        }
+    /// Obtains the remaining length in bytes left of
+    /// the buffer after the cursor
+    pub fn remaining(&self) -> usize {
+        self.buffer.len() - self.cursor
     }
 
+    /// Returns whether there is no remaining bytes in the buffer
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.remaining() == 0
+    }
+
+    /// Internal function used to read single byte from the buffer
     pub(crate) fn read_byte(&mut self) -> DecodeResult<u8> {
-        self.expect_length(1)?;
+        if self.cursor == self.buffer.len() {
+            return Err(DecodeError::UnexpectedEof {
+                cursor: self.cursor,
+                wanted: 1,
+                remaining: 0,
+            });
+        }
+
         let byte: u8 = self.buffer[self.cursor];
         self.cursor += 1;
         Ok(byte)
     }
 
+    /// Internal function used to read a slice of bytes from the buffer
     pub(crate) fn read_bytes(&mut self, length: usize) -> DecodeResult<&'de [u8]> {
-        self.expect_length(length)?;
+        if self.cursor + length > self.buffer.len() {
+            return Err(DecodeError::UnexpectedEof {
+                cursor: self.cursor,
+                wanted: length,
+                remaining: self.remaining(),
+            });
+        }
+
         let slice: &[u8] = &self.buffer[self.cursor..self.cursor + length];
         self.cursor += length;
         Ok(slice)
     }
 
-    pub(crate) fn move_cursor_back(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
+    /// Internal function used to move the cursor back 1 position
+    pub(crate) fn step_back(&mut self) {
+        self.cursor -= 1;
     }
 
+    /// Internal function for reading a fixed length array from the buffer
     pub(crate) fn read_fixed<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
         let slice = self.read_bytes(S)?;
 
@@ -566,23 +695,18 @@ impl<'de> TdfDeserializer<'de> {
         Ok(bytes)
     }
 
+    /// Internal function for skipping a length of bytes
     pub(crate) fn skip_length(&mut self, length: usize) -> DecodeResult<()> {
-        self.expect_length(length)?;
+        if self.cursor + length > self.buffer.len() {
+            return Err(DecodeError::UnexpectedEof {
+                cursor: self.cursor,
+                wanted: length,
+                remaining: self.remaining(),
+            });
+        }
+
         self.cursor += length;
         Ok(())
-    }
-
-    pub(crate) fn skip_tag(&mut self) -> DecodeResult<()> {
-        let tag = Tagged::deserialize_owned(self)?;
-        tag.ty.skip(self)
-    }
-
-    pub fn len(&self) -> usize {
-        self.buffer.len() - self.cursor
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.cursor >= self.buffer.len()
     }
 }
 
