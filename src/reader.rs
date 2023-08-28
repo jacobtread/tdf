@@ -9,6 +9,7 @@ use super::{
 use crate::types::{
     blob::skip_blob,
     float::skip_f32,
+    group::GroupSlice,
     list::skip_list,
     map::{deserialize_map_header, skip_map},
     tagged_union::{skip_tagged_union, TAGGED_UNSET_KEY},
@@ -43,6 +44,13 @@ impl<'de> TdfDeserializer<'de> {
         let byte: u8 = self.buffer[self.cursor];
         self.cursor += 1;
         Ok(byte)
+    }
+
+    /// Peek at the next byte without moving the
+    /// cursor
+    pub fn peek_byte(&mut self) -> DecodeResult<u8> {
+        self.expect_length(1)?;
+        Ok(self.buffer[self.cursor])
     }
 
     pub fn read_bytes<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
@@ -211,32 +219,8 @@ impl<'de> TdfDeserializer<'de> {
         Ok(())
     }
 
-    /// Skips the starting 2 value at the beggining of the group
-    /// if it exists
-    pub fn skip_group_2(&mut self) -> DecodeResult<()> {
-        let first = self.read_byte()?;
-        if first != 2 {
-            self.cursor -= 1;
-        }
-        Ok(())
-    }
-
-    /// Skips an entire group if one exists
-    pub fn skip_group(&mut self) -> DecodeResult<()> {
-        self.skip_group_2()?;
-        while self.cursor < self.buffer.len() {
-            let byte: u8 = self.buffer[self.cursor];
-            if byte == 0 {
-                self.cursor += 1;
-                break;
-            }
-            self.skip()?;
-        }
-        Ok(())
-    }
-
     /// Skips the next tag value
-    pub fn skip(&mut self) -> DecodeResult<()> {
+    pub fn skip_tag(&mut self) -> DecodeResult<()> {
         let tag = Tagged::deserialize_owned(self)?;
         self.skip_type(&tag.ty)
     }
@@ -248,7 +232,7 @@ impl<'de> TdfDeserializer<'de> {
         match ty {
             TdfType::VarInt => skip_var_int(self)?,
             TdfType::String | TdfType::Blob => skip_blob(self)?,
-            TdfType::Group => self.skip_group()?,
+            TdfType::Group => GroupSlice::skip(self)?,
             TdfType::List => skip_list(self)?,
             TdfType::Map => skip_map(self)?,
             TdfType::TaggedUnion => skip_tagged_union(self)?,
@@ -327,19 +311,10 @@ impl<'de> TdfDeserializer<'de> {
             }
             TdfType::Group => {
                 out.push_str("{\n");
-                let mut is_two: bool = false;
-                while self.cursor < self.buffer.len() {
-                    let byte: u8 = self.buffer[self.cursor];
-                    if byte == 0 {
-                        self.cursor += 1;
-                        break;
-                    }
-                    if byte == 2 {
-                        is_two = true;
-                        self.cursor += 1;
-                    }
-                    self.stringify_tag(out, indent + 1)?;
-                }
+
+                let is_two = GroupSlice::deserialize_prefix_two(self)?;
+                GroupSlice::deserialize_content(self, |r| r.stringify_tag(out, indent + 1))?;
+
                 out.push_str(&"  ".repeat(indent));
                 out.push('}');
                 if is_two {

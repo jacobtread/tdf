@@ -1038,7 +1038,7 @@ pub mod tagged_union {
     pub fn skip_tagged_union(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let ty = r.read_byte()?;
         if ty != TAGGED_UNSET_KEY {
-            r.skip()?;
+            r.skip_tag()?;
         }
         Ok(())
     }
@@ -1438,5 +1438,76 @@ pub mod u12 {
 
     impl TdfTyped for U12<'_> {
         const TYPE: TdfType = TdfType::U12;
+    }
+}
+
+pub mod group {
+    use crate::{error::DecodeResult, reader::TdfDeserializer};
+
+    use super::TdfDeserialize;
+
+    /// [GroupSlice] is a slice of bytes representing
+    /// a group tdf that hasn't been decoded into its
+    /// inner types
+    pub struct GroupSlice<'de> {
+        pub is_two: bool,
+        pub data: &'de [u8],
+    }
+
+    impl GroupSlice<'_> {
+        pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
+            let first = r.peek_byte()?;
+            let is_two = first == 2;
+            if !is_two {
+                r.read_byte()?;
+            }
+            Ok(is_two)
+        }
+
+        #[inline]
+        pub fn deserialize_content<'de, A>(
+            r: &mut TdfDeserializer<'de>,
+            mut action: A,
+        ) -> DecodeResult<&'de [u8]>
+        where
+            A: FnMut(&mut TdfDeserializer<'de>) -> DecodeResult<()>,
+        {
+            let start = r.cursor;
+            loop {
+                // If the next byte is zero the structure is complete
+                let next = r.peek_byte()?;
+                if next == 0 {
+                    r.read_byte()?;
+                    break;
+                }
+
+                // Call the decoding action on the type
+                action(r)?;
+            }
+            let end = r.cursor - 1;
+            let data = &r.buffer[start..end];
+            Ok(data)
+        }
+
+        #[inline]
+        pub fn deserialize_content_skip<'de>(
+            r: &mut TdfDeserializer<'de>,
+        ) -> DecodeResult<&'de [u8]> {
+            Self::deserialize_content(r, |r| r.skip_tag())
+        }
+
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            Self::deserialize_prefix_two(r)?;
+            Self::deserialize_content_skip(r)?;
+            Ok(())
+        }
+    }
+
+    impl<'de> TdfDeserialize<'de> for GroupSlice<'de> {
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+            let is_two = Self::deserialize_prefix_two(r)?;
+            let data = Self::deserialize_content_skip(r)?;
+            Ok(Self { is_two, data })
+        }
     }
 }
