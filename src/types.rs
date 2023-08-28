@@ -1084,9 +1084,9 @@ pub mod tagged_union {
 
     /// Representation of a tagged union
     #[derive(Debug, PartialEq, Eq)]
-    pub enum TaggedUnion<Value> {
+    pub enum TaggedUnion<V> {
         /// Set variant of a union value
-        Set { key: u8, tag: Tag, value: Value },
+        Set { key: u8, tag: Tag, value: V },
         /// Unset variant of a union value
         Unset,
     }
@@ -1094,7 +1094,7 @@ pub mod tagged_union {
     /// Key used by tagged unions that have no set value
     pub const TAGGED_UNSET_KEY: u8 = 0x7F;
 
-    impl<Value> TaggedUnion<Value> {
+    impl<V> TaggedUnion<V> {
         /// Checks if the union is of set type
         pub fn is_set(&self) -> bool {
             matches!(self, Self::Set { .. })
@@ -1107,7 +1107,7 @@ pub mod tagged_union {
 
         /// Unwraps the underlying value stored in this tagged
         /// union. Will panic if the tagged union is unset
-        pub fn unwrap(self) -> Value {
+        pub fn unwrap(self) -> V {
             match self {
                 Self::Unset => panic!("Attempted to unwrap unset union"),
                 Self::Set { value, .. } => value,
@@ -1115,8 +1115,8 @@ pub mod tagged_union {
         }
     }
 
-    impl<Value> From<TaggedUnion<Value>> for Option<Value> {
-        fn from(value: TaggedUnion<Value>) -> Self {
+    impl<V> From<TaggedUnion<V>> for Option<V> {
+        fn from(value: TaggedUnion<V>) -> Self {
             match value {
                 TaggedUnion::Set { value, .. } => Some(value),
                 TaggedUnion::Unset => None,
@@ -1124,7 +1124,7 @@ pub mod tagged_union {
         }
     }
 
-    impl<Value> TdfTyped for TaggedUnion<Value> {
+    impl<V> TdfTyped for TaggedUnion<V> {
         const TYPE: TdfType = TdfType::TaggedUnion;
     }
 
@@ -1136,9 +1136,9 @@ pub mod tagged_union {
         Ok(())
     }
 
-    impl<'de, Value> TdfDeserialize<'de> for TaggedUnion<Value>
+    impl<'de, V> TdfDeserialize<'de> for TaggedUnion<V>
     where
-        Value: TdfDeserialize<'de> + TdfTyped,
+        V: TdfDeserialize<'de> + TdfTyped,
     {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let key = r.read_byte()?;
@@ -1146,7 +1146,7 @@ pub mod tagged_union {
                 return Ok(TaggedUnion::Unset);
             }
             let tag = Tagged::deserialize_owned(r)?;
-            let expected_type = Value::TYPE;
+            let expected_type = V::TYPE;
             let actual_type = tag.ty;
             if actual_type != expected_type {
                 return Err(DecodeError::InvalidType {
@@ -1154,7 +1154,7 @@ pub mod tagged_union {
                     actual: actual_type,
                 });
             }
-            let value = Value::deserialize(r)?;
+            let value = V::deserialize(r)?;
 
             Ok(TaggedUnion::Set {
                 key,
@@ -1164,15 +1164,15 @@ pub mod tagged_union {
         }
     }
 
-    impl<Value> TdfSerialize for TaggedUnion<Value>
+    impl<V> TdfSerialize for TaggedUnion<V>
     where
-        Value: TdfSerialize + TdfTyped,
+        V: TdfSerialize + TdfTyped,
     {
         fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             match self {
                 TaggedUnion::Set { key, tag, value } => {
                     w.write_byte(*key);
-                    Tagged::serialize_raw(w, &tag.0, Value::TYPE);
+                    Tagged::serialize_raw(w, &tag.0, V::TYPE);
                     value.serialize(w);
                 }
                 TaggedUnion::Unset => w.write_byte(TAGGED_UNSET_KEY),
