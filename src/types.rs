@@ -1414,6 +1414,7 @@ pub mod u12 {
 
     /// [U12] The type/name for this structure is not yet known
     /// but is represented using 8 bytes of data and a string value
+    #[derive(Debug)]
     pub struct U12<'de> {
         /// The leading byte value (Encoding not yet known)
         pub data: [u8; 8],
@@ -1454,6 +1455,8 @@ pub mod group {
         pub data: &'de [u8],
     }
 
+    pub struct GroupSliceIterator {}
+
     impl GroupSlice<'_> {
         pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
             let is_two = r.read_byte()? == 2;
@@ -1461,6 +1464,14 @@ pub mod group {
                 r.move_cursor_back();
             }
             Ok(is_two)
+        }
+
+        pub fn deserialize_group_end(r: &mut TdfDeserializer) -> DecodeResult<bool> {
+            let is_end = r.read_byte()? == 0;
+            if !is_end {
+                r.move_cursor_back();
+            }
+            Ok(is_end)
         }
 
         #[inline]
@@ -1473,14 +1484,10 @@ pub mod group {
         {
             let start = r.cursor;
             loop {
-                // If the next byte is zero the structure is complete
-                let next = r.read_byte()?;
-                if next == 0 {
+                let is_end = Self::deserialize_group_end(r)?;
+                if is_end {
                     break;
                 }
-
-                // Wasn't the zero byte move the cursor back
-                r.move_cursor_back();
 
                 // Call the decoding action on the type
                 action(r)?;
