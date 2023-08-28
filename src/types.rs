@@ -1634,15 +1634,26 @@ pub mod group {
 
     use super::TdfDeserialize;
 
-    /// [GroupSlice] is a slice of bytes representing
-    /// a group tdf that hasn't been decoded into its
-    /// inner types
+    /// [GroupSlice] is a slice of bytes representing a group tdf that hasn't
+    /// been decoded into its inner tags
+    ///
+    /// The structure also provides functions that are useful for decoding group types:
+    ///
+    /// * [GroupSlice::deserialize_prefix_two] - Attempt to deserialize the list prefix
+    /// * [GroupSlice::deserialize_group_end] - Attempt to deserialize the end of list
+    /// * [GroupSlice::deserialize_content] - Attempt to deserialize the content using an action
+    /// * [GroupSlice::deserialize_content_skip] - Attempt to deserialize the content skipping all values
     pub struct GroupSlice<'de> {
+        /// Whether the group is prefixed by a 2
         pub is_two: bool,
+        /// The encoded byte contents of the group
         pub data: &'de [u8],
     }
 
     impl GroupSlice<'_> {
+        /// Attempts to read a byte and if the value is two the group starts with
+        /// a two prefix otherwise the cursor is stepped back and reading should
+        /// continue as normal
         pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
             let is_two = r.read_byte()? == 2;
             if !is_two {
@@ -1651,6 +1662,9 @@ pub mod group {
             Ok(is_two)
         }
 
+        /// Attempts to read a byte if the byte value is zero the group is
+        /// considered ended otherwise the cursor is stepped back and reading
+        /// should continue as normal
         pub fn deserialize_group_end(r: &mut TdfDeserializer) -> DecodeResult<bool> {
             let is_end = r.read_byte()? == 0;
             if !is_end {
@@ -1682,6 +1696,9 @@ pub mod group {
             Ok(data)
         }
 
+        /// Skips the remaining contents of a group until the condition
+        /// within [GroupSlice::deserialize_group_end] is met and the group
+        /// is considered finished
         #[inline]
         pub fn deserialize_content_skip<'de>(
             r: &mut TdfDeserializer<'de>,
