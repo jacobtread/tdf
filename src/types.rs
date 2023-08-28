@@ -22,14 +22,23 @@ where
 
 /// [TdfDeserialize] trait implemented by structures that can
 /// be deserialized from bytes of tdf values
+///
+/// This trait can be implemented by any custom structure in order
+/// to provide a deserialization implementation for the structure.
 pub trait TdfDeserialize<'de>: Sized {
     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self>;
 }
 
+/// [TdfDeserializeOwned] is an alternative to [TdfDeserialize] where the
+/// deserialization lifetime 'de is not required in order to deserialize the
+/// value.
+///
+/// See [TdfDeserialize] for deserialization examples
 pub trait TdfDeserializeOwned: Sized {
     fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self>;
 }
 
+/// All types that implement [TdfDeserializeOwned] also implement [TdfDeserialize]
 impl<T> TdfDeserialize<'_> for T
 where
     T: TdfDeserializeOwned,
@@ -57,6 +66,9 @@ where
 /// the end of your implementation to end the group
 ///
 /// ## Implementing TdfSerialize
+///
+/// See [Serialization](crate::writer) for all the tagging and writing functions
+/// that can be used
 ///
 /// ### Example Without Type
 ///
