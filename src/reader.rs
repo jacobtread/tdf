@@ -135,7 +135,28 @@
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
 //!
-//! let length: usize = r.until_list(b"LIST").unwrap();
+//! let (value_ty, length): usize = r.until_list(b"LIST").unwrap();
+//!
+//! for i in 0..length {
+//!     // Read complex items
+//! }
+//!
+//! // Dont forget to read ALL of the items or an error will occur
+//! ```
+//!
+//! The above until_list function doesn't check the types for the value instead it
+//! provides them to you. If you would like to have the types be a specific type you can use
+//! the [until_list_typed](TdfDeserializer::until_list_typed) function.
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//! use tdf::tag::TdfType;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! // Specify the value types must be strings
+//! let length: usize = r.until_list_typed(b"LIST", TdfType::String).unwrap();
 //!
 //! for i in 0..length {
 //!     // Read complex items
@@ -455,16 +476,21 @@ impl<'de> TdfDeserializer<'de> {
         Ok(value)
     }
 
-    pub fn until_list(&mut self, tag: RawTag, value_type: TdfType) -> DecodeResult<usize> {
+    pub fn until_list(&mut self, tag: RawTag) -> DecodeResult<(TdfType, usize)> {
         self.until_tag(tag, TdfType::List)?;
         let list_type = TdfType::deserialize_owned(self)?;
+        let count = usize::deserialize_owned(self)?;
+        Ok((list_type, count))
+    }
+
+    pub fn until_list_typed(&mut self, tag: RawTag, value_type: TdfType) -> DecodeResult<usize> {
+        let (list_type, count) = self.until_list(tag)?;
         if list_type != value_type {
             return Err(DecodeError::InvalidType {
                 expected: value_type,
                 actual: list_type,
             });
         }
-        let count = usize::deserialize_owned(self)?;
         Ok(count)
     }
 
