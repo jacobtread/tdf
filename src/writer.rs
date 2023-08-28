@@ -238,32 +238,32 @@ pub trait TdfSerializer: Sized {
         self.write_byte(0);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_bool(&mut self, tag: RawTag, value: bool) {
         self.tag_owned(tag, value);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_u8(&mut self, tag: RawTag, value: u8) {
         self.tag_owned(tag, value);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_u16(&mut self, tag: RawTag, value: u16) {
         self.tag_owned(tag, value);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_u32(&mut self, tag: RawTag, value: u32) {
         self.tag_owned(tag, value);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_u64(&mut self, tag: RawTag, value: u64) {
         self.tag_owned(tag, value);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_usize(&mut self, tag: RawTag, value: usize) {
         self.tag_owned(tag, value);
     }
@@ -275,7 +275,7 @@ pub trait TdfSerializer: Sized {
         write_empty_str(self);
     }
 
-    #[inline]
+    #[inline(always)]
     fn tag_str(&mut self, tag: RawTag, value: &str) {
         self.tag_alt(tag, value);
     }
