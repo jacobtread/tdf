@@ -19,7 +19,7 @@ pub use stringify::{StringifyError, TdfStringifier};
 pub use tag::{RawTag, Tag, Tagged, TdfType};
 pub use types::serialize_vec;
 pub use types::{
-    Blob, ObjectId, ObjectType, TaggedUnion, TdfDeserialize, TdfDeserializeOwned, TdfMap,
-    TdfSerialize, TdfSerializeOwned, TdfTyped, VarIntList, U12,
+    Blob, GroupSlice, ObjectId, ObjectType, TaggedUnion, TdfDeserialize, TdfDeserializeOwned,
+    TdfMap, TdfSerialize, TdfSerializeOwned, TdfTyped, VarIntList, U12,
 };
 pub use writer::TdfSerializer;

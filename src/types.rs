@@ -2,6 +2,7 @@
 //! with Blaze packets
 
 pub use blob::Blob;
+pub use group::GroupSlice;
 pub use map::TdfMap;
 pub use object_id::ObjectId;
 pub use object_type::ObjectType;
@@ -11,6 +12,8 @@ pub use var_int_list::VarIntList;
 
 use crate::{error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer};
 
+/// Serializes the provided [TdfSerialize] type
+/// as a Vec of bytes
 pub fn serialize_vec<V>(value: &V) -> Vec<u8>
 where
     V: TdfSerialize,
@@ -25,7 +28,76 @@ where
 ///
 /// This trait can be implemented by any custom structure in order
 /// to provide a deserialization implementation for the structure.
+///
+/// ## Typed Deserialization
+///
+/// If you would like to use the structure as a value that can be decoded
+/// from a tagged type you must implement [TdfTyped] to map it to the
+/// desired [TdfType]. Your deserialization must match the chosen type
+/// otherwise the reader may be unable to deserialize any further values.
+///
+/// If you are reading a group type and don't indent to completely
+/// read all the values you will need to skip the remaining data with
+/// [GroupSlice::deserialize_content_skip]
+///
+/// ## Implementing Deserialization
+///
+/// See [Deserialization](crate::reader) for all the reading functions that
+/// can be used
+///
+/// ### Example Without Type
+///
+/// Below is an example of a deserializer you may use for a packet structure
+///
+/// ```
+/// use tdf::prelude::*;
+///
+/// struct MyCustomStruct<'de> {
+///     test: u32,
+///     value: &'de str
+/// }
+///
+/// impl<'de> TdfDeserialize<'de> for MyCustomStruct {
+///     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+///         let test: u32 = r.tag(b"TEST")?;
+///         let value: &str = r.tag(b"VALU")?;
+///         Ok(Self { test, value })
+///     }
+/// }
+///
+/// ```
+///
+/// ### Group Example
+///
+/// Below is an example of deserializing a structure as a [TdfType::Group] type. When
+/// deserializing a group ensure that if you arent completely reading all the fields
+/// that you call [GroupSlice::deserialize_content_skip] to skip the remaining data
+///
+///
+/// ```
+/// use tdf::prelude::*;
+///
+/// struct MyCustomStruct<'de> {
+///     test: u32,
+///     value: &'de str
+/// }
+///
+/// impl<'de> TdfDeserialize<'de> for MyCustomStruct {
+///     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+///         let test: u32 = r.tag(b"TEST")?;
+///         let value: &str = r.tag(b"VALU")?;
+///         GroupSlice::deserialize_content_skip(r)?;
+///         Ok(Self { test, value })
+///     }
+/// }
+///
+/// impl TdfTyped for MyCustomStruct<'_> {
+///     const TYPE: TdfType = TdfType::Group;
+/// }
+///
+/// ```
 pub trait TdfDeserialize<'de>: Sized {
+    /// Deserialize this value from the provided deserializer
     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self>;
 }
 
@@ -35,6 +107,7 @@ pub trait TdfDeserialize<'de>: Sized {
 ///
 /// See [TdfDeserialize] for deserialization examples
 pub trait TdfDeserializeOwned: Sized {
+    /// Deserialize this value from the provided deserializer
     fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self>;
 }
 
@@ -118,6 +191,7 @@ where
 ///
 /// ```
 pub trait TdfSerialize: Sized {
+    /// Serialize this value into the provided serializer
     fn serialize<S: TdfSerializer>(&self, w: &mut S);
 }
 
@@ -131,7 +205,7 @@ pub trait TdfSerializeOwned: Sized {
     ///
     /// Value is serialized using an owned copy of the value
     /// actual implementation is similar to normal serialization
-    /// see [TdfSerialize::serialize] for examples
+    /// see [TdfSerialize] for examples
     fn serialize_owned<S: TdfSerializer>(self, w: &mut S);
 }
 
@@ -1567,8 +1641,6 @@ pub mod group {
         pub is_two: bool,
         pub data: &'de [u8],
     }
-
-    pub struct GroupSliceIterator {}
 
     impl GroupSlice<'_> {
         pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
