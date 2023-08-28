@@ -1,4 +1,4 @@
-//! Serializastion and writing for the Tdf format.
+//! Serialization and writing for the Tdf format.
 //!
 //! This module provides a writer [TdfSerializer] structure for writing tags
 //! and raw/special values to a buffer for serialization.
@@ -126,15 +126,6 @@
 //! * [tag_union_start](TdfSerializer::tag_union_start) - Special function for writing a tagged union header (Used to manually write list impl for complex types)
 //! * [tag_union_value](TdfSerializer::tag_union_value) - Special function for writing a tagged union
 //! * [tag_union_unset](TdfSerializer::tag_union_unset) - Special function for writing a tagged union with an unset value
-//!
-//! ## Extra Functions
-//!
-//! Below are some extra functions for performing operatings on a buffer
-//!
-//! * [clear](TdfSerializer::clear) - Clears the underlying write buffer, use this if you want to re-use the same writer
-//! * [into_inner](TdfSerializer::into_inner) - Consumes self returning the buffer within
-//! * [buffer](TdfSerializer::buffer) - Returns a slice to the buffer within
-//! * [shrink_to](TdfSerializer::shrink_to) - Shrinks the capacity of the underlying buffer
 
 use crate::{
     tag::{RawTag, Tagged, TdfType},
