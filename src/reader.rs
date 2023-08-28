@@ -21,91 +21,19 @@ use crate::types::{
 /// underlying slice using a cursor and with a position that can
 /// be saved using the marker. Provides functions for reading
 /// certain data types in the Blaze format
-pub struct TdfDeserializer<'a> {
+pub struct TdfDeserializer<'de> {
     /// The underlying buffer to read from
-    pub buffer: &'a [u8],
+    pub buffer: &'de [u8],
     /// The cursor position on the buffer. The cursor should not be set
     /// to any arbitry values should only be set to previously know values
     pub cursor: usize,
 }
 
 impl<'de> TdfDeserializer<'de> {
-    /// Creates a new reader over the provided slice of bytes with
-    /// the default cursor position at zero
     pub fn new(buffer: &'de [u8]) -> Self {
         Self { buffer, cursor: 0 }
     }
 
-    /// Takes a single byte from the underlying buffer moving
-    /// the cursor over by one. Will return UnexpectedEof error
-    /// if there are no bytes left
-    pub fn read_byte(&mut self) -> DecodeResult<u8> {
-        self.expect_length(1)?;
-        let byte: u8 = self.buffer[self.cursor];
-        self.cursor += 1;
-        Ok(byte)
-    }
-
-    /// Peek at the next byte without moving the
-    /// cursor
-    pub fn peek_byte(&mut self) -> DecodeResult<u8> {
-        self.expect_length(1)?;
-        Ok(self.buffer[self.cursor])
-    }
-
-    pub fn read_bytes<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
-        let slice = self.read_slice(S)?;
-
-        // Copy the bytes into the new fixed size array
-        let mut bytes: [u8; S] = [0u8; S];
-        bytes.copy_from_slice(slice);
-
-        Ok(bytes)
-    }
-
-    /// Takes a slice of the provided length from the portion of the
-    /// buffer that is after the cursor position
-    ///
-    /// `length` The length of the slice to take
-    pub fn read_slice(&mut self, length: usize) -> DecodeResult<&'de [u8]> {
-        self.expect_length(length)?;
-        let slice: &[u8] = &self.buffer[self.cursor..self.cursor + length];
-        self.cursor += length;
-        Ok(slice)
-    }
-
-    /// Attempts to ensure the next length exists past the cursor
-    /// will return an UnexpectedEof if there is not enough bytes
-    ///
-    /// `length` The length to expect
-    fn expect_length(&self, length: usize) -> DecodeResult<()> {
-        if self.cursor + length > self.buffer.len() {
-            Err(DecodeError::UnexpectedEof {
-                cursor: self.cursor,
-                wanted: length,
-                remaining: self.len(),
-            })
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Returns the remaining length left after the cursor
-    pub fn len(&self) -> usize {
-        self.buffer.len() - self.cursor
-    }
-
-    /// Returns if there is nothing left after the cursor
-    pub fn is_empty(&self) -> bool {
-        self.cursor >= self.buffer.len()
-    }
-
-    /// Decodes tags from the reader until the tag with the provided tag name
-    /// is found. If the tag type doesn't match the `expected_type` then an
-    /// error will be returned.
-    ///
-    /// `tag` The tag name to read until
-    /// `ty`  The expected type of the tag
     pub fn until_tag(&mut self, tag: &[u8], ty: TdfType) -> DecodeResult<()> {
         let tag = Tag::from(tag);
         loop {
@@ -134,12 +62,6 @@ impl<'de> TdfDeserializer<'de> {
         }
     }
 
-    /// Attempting version of decode_until that returns true if the value was decoded up to
-    /// otherwise returns false. Marks the reader position before reading and resets the position
-    /// if the tag was not found
-    ///
-    /// `tag` The tag name to read until
-    /// `ty`  The expected type of the tag
     pub fn try_until_tag(&mut self, tag: &[u8], ty: TdfType) -> bool {
         let tag = Tag::from(tag);
         let start = self.cursor;
@@ -412,7 +334,7 @@ impl<'de> TdfDeserializer<'de> {
                 out.push_str(&value.to_string());
             }
             TdfType::U12 => {
-                let bytes = self.read_slice(8)?;
+                let bytes = self.read_bytes(8)?;
                 out.push_str(&format!("{:?} + ", bytes));
                 let value = String::deserialize_owned(self)?;
                 out.push_str(&format!("\"{}\"", value));
@@ -459,5 +381,56 @@ impl<'de> TdfDeserializer<'de> {
         }
 
         Ok(length)
+    }
+
+    fn expect_length(&self, length: usize) -> DecodeResult<()> {
+        if self.cursor + length > self.buffer.len() {
+            Err(DecodeError::UnexpectedEof {
+                cursor: self.cursor,
+                wanted: length,
+                remaining: self.len(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn read_byte(&mut self) -> DecodeResult<u8> {
+        self.expect_length(1)?;
+        let byte: u8 = self.buffer[self.cursor];
+        self.cursor += 1;
+        Ok(byte)
+    }
+
+    pub fn read_bytes(&mut self, length: usize) -> DecodeResult<&'de [u8]> {
+        self.expect_length(length)?;
+        let slice: &[u8] = &self.buffer[self.cursor..self.cursor + length];
+        self.cursor += length;
+        Ok(slice)
+    }
+
+    /// Moves the cursor back 1 byte
+    pub fn move_cursor_back(&mut self) {
+        self.cursor = self.cursor.saturating_sub(1);
+    }
+
+    pub fn read_fixed<const S: usize>(&mut self) -> DecodeResult<[u8; S]> {
+        let slice = self.read_bytes(S)?;
+
+        // Copy the bytes into the new fixed size array
+        let mut bytes: [u8; S] = [0u8; S];
+        bytes.copy_from_slice(slice);
+
+        Ok(bytes)
+    }
+
+    /// Returns the remaining length left after the cursor
+    pub fn len(&self) -> usize {
+        self.buffer.len() - self.cursor
+    }
+
+    /// Returns if there is nothing left after the cursor
+    pub fn is_empty(&self) -> bool {
+        self.cursor >= self.buffer.len()
     }
 }

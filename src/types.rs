@@ -482,7 +482,7 @@ pub mod blob {
 
         pub fn deserialize_raw<'de>(r: &mut TdfDeserializer<'de>) -> DecodeResult<&'de [u8]> {
             let length = usize::deserialize_owned(r)?;
-            let bytes = r.read_slice(length)?;
+            let bytes = r.read_bytes(length)?;
             Ok(bytes)
         }
     }
@@ -1358,7 +1358,7 @@ pub mod float {
 
     impl TdfDeserializeOwned for f32 {
         fn deserialize_owned(r: &mut TdfDeserializer) -> DecodeResult<Self> {
-            let bytes: [u8; 4] = r.read_bytes()?;
+            let bytes: [u8; 4] = r.read_fixed()?;
             Ok(f32::from_be_bytes(bytes))
         }
     }
@@ -1423,7 +1423,7 @@ pub mod u12 {
 
     impl<'de> TdfDeserialize<'de> for U12<'de> {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            let data: [u8; 8] = r.read_bytes()?;
+            let data: [u8; 8] = r.read_fixed()?;
             let value: &str = <&str>::deserialize(r)?;
             Ok(Self { data, value })
         }
@@ -1456,10 +1456,9 @@ pub mod group {
 
     impl GroupSlice<'_> {
         pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
-            let first = r.peek_byte()?;
-            let is_two = first == 2;
+            let is_two = r.read_byte()? == 2;
             if !is_two {
-                r.read_byte()?;
+                r.move_cursor_back();
             }
             Ok(is_two)
         }
@@ -1475,11 +1474,13 @@ pub mod group {
             let start = r.cursor;
             loop {
                 // If the next byte is zero the structure is complete
-                let next = r.peek_byte()?;
+                let next = r.read_byte()?;
                 if next == 0 {
-                    r.read_byte()?;
                     break;
                 }
+
+                // Wasn't the zero byte move the cursor back
+                r.move_cursor_back();
 
                 // Call the decoding action on the type
                 action(r)?;

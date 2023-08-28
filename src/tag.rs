@@ -55,7 +55,7 @@ impl Tagged {
 
 impl TdfDeserializeOwned for Tagged {
     fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
-        let input: [u8; 4] = r.read_bytes()?;
+        let input: [u8; 4] = r.read_fixed()?;
         let ty: TdfType = TdfType::try_from(input[3])?;
         let mut output: [u8; 4] = [0, 0, 0, 0];
 
