@@ -11,6 +11,17 @@ pub use var_int_list::VarIntList;
 
 use crate::{error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer};
 
+pub fn serialize_vec<V>(value: &V) -> Vec<u8>
+where
+    V: TdfSerialize,
+{
+    let mut output = Vec::new();
+    value.serialize(&mut output);
+    output
+}
+
+/// [TdfDeserialize] trait implemented by structures that can
+/// be deserialized from bytes of tdf values
 pub trait TdfDeserialize<'de>: Sized {
     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self>;
 }
@@ -29,20 +40,92 @@ where
     }
 }
 
+/// [TdfSerialize] trait implemented by structures that can be
+/// serialized into bytes of tdf values
+///
+/// This trait can be implemented by any custom structure in order
+/// to provide a serialization implementation for the structure.
+///
+/// ## Typed Serialization
+///
+/// If you would like to use the structure as a tag value you will need
+/// to implement [TdfTyped] to map it to a [TdfType]. Your serialization
+/// must match the structure for the [TdfType] that you choose.
+///
+/// If you are serializing a group ([TdfType::Group]) of values you must
+/// ensure that you call [tag_group_end](TdfSerializer::tag_group_end) at
+/// the end of your implementation to end the group
+///
+/// ## Implementing TdfSerialize
+///
+/// ### Example Without Type
+///
+/// Below is an example of a serializer you may use for a packet structure
+///
+/// ```
+/// use tdf::prelude::*;
+///
+/// struct MyCustomStruct {
+///     value: u32,
+/// }
+///
+/// impl TdfSerialize for MyCustomStruct {
+///     fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+///         w.tag_u32(b"TEST", self.value);
+///         w.tag_str(b"VALU", "This is an example string");
+///     }
+/// }
+///
+/// ```
+///
+/// ### Group Example
+///
+/// Below is an example of serializing a structure as a [TdfType::Group] type. When
+/// serializing a group ensure that you call [tag_group_end](TdfSerializer::tag_group_end)
+/// after your writing logic
+///
+///
+/// ```
+/// use tdf::prelude::*;
+///
+/// struct MyCustomStruct {
+///     value: u32,
+/// }
+///
+/// impl TdfSerialize for MyCustomStruct {
+///     fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+///         w.tag_u32(b"TEST", self.value);
+///         w.tag_str(b"VALU", "This is an example string");
+///         w.tag_group_end();
+///     }
+/// }
+///
+/// impl TdfTyped for MyCustomStruct {
+///     const TYPE: TdfType = TdfType::Group;
+/// }
+///
+/// ```
 pub trait TdfSerialize: Sized {
     fn serialize<S: TdfSerializer>(&self, w: &mut S);
-
-    fn serialize_vec(&self) -> Vec<u8> {
-        let mut output = Vec::new();
-        self.serialize(&mut output);
-        output
-    }
 }
 
+/// [TdfSerializeOwned] trait implemented by structures that
+/// can be serialized in their owned value form.
+///
+/// This is implemented by primitive values to prevent unnessciary
+/// copying when serializing values that have already been copied
 pub trait TdfSerializeOwned: Sized {
+    /// Serialize this value into the provided serializer
+    ///
+    /// Value is serialized using an owned copy of the value
+    /// actual implementation is similar to normal serialization
+    /// see [TdfSerialize::serialize] for examples
     fn serialize_owned<S: TdfSerializer>(self, w: &mut S);
 }
 
+/// Types that implement [TdfSerializeOwned] and [Copy] (Primitive values)
+/// automatically implement [TdfSerialize] by copying the provided value
+/// and serializing it in its owned form
 impl<T> TdfSerialize for T
 where
     T: TdfSerializeOwned + Copy,
