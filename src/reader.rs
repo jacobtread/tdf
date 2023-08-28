@@ -11,17 +11,32 @@ use crate::{
 pub struct TdfDeserializer<'de> {
     pub(crate) buffer: &'de [u8],
     pub(crate) cursor: usize,
+    /// Group indentation counter, used to count depth for tag searching
+    pub(crate) group: u8,
 }
 
 impl<'de> TdfDeserializer<'de> {
     pub fn new(buffer: &'de [u8]) -> Self {
-        Self { buffer, cursor: 0 }
+        Self {
+            buffer,
+            cursor: 0,
+            group: 0,
+        }
     }
 
     pub fn until_tag(&mut self, tag: RawTag, ty: TdfType) -> DecodeResult<()> {
         let tag = Tag::from(tag);
 
         while !self.is_empty() {
+            // Handle reaching the end of a group
+            if self.group > 0 {
+                let is_end = GroupSlice::deserialize_group_end(self)?;
+                if is_end {
+                    self.group -= 1;
+                    break;
+                }
+            }
+
             let tagged = Tagged::deserialize_owned(self)?;
 
             // Skip tags that don't match
@@ -47,15 +62,20 @@ impl<'de> TdfDeserializer<'de> {
     }
 
     pub fn try_until_tag(&mut self, tag: RawTag, ty: TdfType) -> DecodeResult<bool> {
+        // Preserve initial state
         let start = self.cursor;
+        let start_group = self.group;
+
         let exists = match self.until_tag(tag, ty) {
             Ok(_) => true,
             Err(DecodeError::MissingTag { .. }) => false,
             Err(err) => return Err(err),
         };
 
+        // Reset to initial state
         if !exists {
             self.cursor = start;
+            self.group = start_group;
         }
 
         Ok(exists)
@@ -83,16 +103,22 @@ impl<'de> TdfDeserializer<'de> {
     }
 
     /// Attempts to find a group with the provided tag then runs the
-    /// provided `action` on the group contents. To read tags within
+    /// provided `action` on the group contents.
+    #[inline]
     pub fn group<A, R>(&mut self, tag: RawTag, mut action: A) -> DecodeResult<R>
     where
         A: FnMut(bool, &mut Self) -> DecodeResult<R>,
     {
         self.until_tag(tag, TdfType::Group)?;
+        self.group += 1;
         let is_two = GroupSlice::deserialize_prefix_two(self)?;
+
         let value = action(is_two, self)?;
+
         // Deserialize any remaining group content
         GroupSlice::deserialize_content_skip(self)?;
+
+        self.group -= 1;
         Ok(value)
     }
 
