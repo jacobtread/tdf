@@ -23,3 +23,38 @@ pub use types::{
     TdfMap, TdfSerialize, TdfSerializeOwned, TdfTyped, VarIntList, U12,
 };
 pub use writer::TdfSerializer;
+
+use tdf_derive::{TdfDeserialize, TdfSerialize};
+
+use crate as tdf;
+
+#[derive(TdfSerialize)]
+pub struct Example {
+    #[tdf(tag = b"ABCD")]
+    pub example: u32,
+}
+
+#[derive(TdfSerialize, TdfDeserialize)]
+pub struct ExampleWithLifetime<'a> {
+    #[tdf(tag = b"ABCD")]
+    pub example: &'a str,
+}
+
+#[derive(TdfSerialize)]
+pub struct ExampleWithLifetimeGeneric<'a, T>
+where
+    T: TdfSerialize + TdfTyped,
+{
+    #[tdf(tag = b"ABCD")]
+    pub example: &'a str,
+    #[tdf(tag = b"TEST")]
+    pub alt: T,
+}
+
+#[derive(TdfSerialize, TdfDeserialize)]
+#[tdf(repr = u8)]
+#[repr(u8)]
+pub enum TestEnum {
+    Value = 0x1,
+    Test = 0x2,
+}
