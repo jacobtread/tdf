@@ -3,7 +3,11 @@
 use crate::{
     error::DecodeResult,
     reader::TdfDeserializer,
-    types::{TdfDeserializeOwned, TdfSerializeOwned},
+    types::{
+        float::skip_f32, group::GroupSlice, list::skip_list, map::skip_map,
+        tagged_union::skip_tagged_union, var_int::skip_var_int, Blob, ObjectId, ObjectType,
+        TdfDeserializeOwned, TdfSerializeOwned, VarIntList, U12,
+    },
     writer::TdfSerializer,
 };
 
@@ -83,7 +87,7 @@ impl TdfDeserializeOwned for Tagged {
 }
 
 /// Decoded tag bytes type
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Tag(pub [u8; 4]);
 
 impl From<&[u8]> for Tag {
@@ -158,6 +162,24 @@ impl TryFrom<u8> for TdfType {
             0xC => TdfType::U12,
             ty => return Err(DecodeError::UnknownType { ty }),
         })
+    }
+}
+
+impl TdfType {
+    pub fn skip(&self, r: &mut TdfDeserializer) -> DecodeResult<()> {
+        match self {
+            TdfType::VarInt => skip_var_int(r),
+            TdfType::String | TdfType::Blob => Blob::skip(r),
+            TdfType::Group => GroupSlice::skip(r),
+            TdfType::List => skip_list(r),
+            TdfType::Map => skip_map(r),
+            TdfType::TaggedUnion => skip_tagged_union(r),
+            TdfType::VarIntList => VarIntList::skip(r),
+            TdfType::ObjectType => ObjectType::skip(r),
+            TdfType::ObjectId => ObjectId::skip(r),
+            TdfType::Float => skip_f32(r),
+            TdfType::U12 => U12::skip(r),
+        }
     }
 }
 

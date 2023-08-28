@@ -485,11 +485,11 @@ pub mod blob {
             let bytes = r.read_bytes(length)?;
             Ok(bytes)
         }
-    }
 
-    pub fn skip_blob(r: &mut TdfDeserializer) -> DecodeResult<()> {
-        let length: usize = usize::deserialize_owned(r)?;
-        r.skip_length(length)
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            let length: usize = usize::deserialize_owned(r)?;
+            r.skip_length(length)
+        }
     }
 
     impl<'de> TdfDeserialize<'de> for Blob<'de> {
@@ -514,14 +514,17 @@ pub mod blob {
 pub mod list {
     use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
-        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
+        error::{DecodeError, DecodeResult},
+        reader::TdfDeserializer,
+        tag::TdfType,
+        writer::TdfSerializer,
     };
 
     pub fn skip_list(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let ty: TdfType = TdfType::deserialize_owned(r)?;
         let length: usize = usize::deserialize_owned(r)?;
         for _ in 0..length {
-            r.skip_type(&ty)?;
+            ty.skip(r)?;
         }
         Ok(())
     }
@@ -536,7 +539,14 @@ pub mod list {
         C: TdfDeserialize<'de> + TdfTyped,
     {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            r.expect_type(C::TYPE)?;
+            let value_type = TdfType::deserialize_owned(r)?;
+
+            if value_type != C::TYPE {
+                return Err(DecodeError::InvalidType {
+                    expected: C::TYPE,
+                    actual: value_type,
+                });
+            }
 
             let length = usize::deserialize_owned(r)?;
             let mut values = Vec::with_capacity(length);
@@ -923,8 +933,8 @@ pub mod map {
     pub fn skip_map(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let (key_ty, value_ty, length) = deserialize_map_header(r)?;
         for _ in 0..length {
-            r.skip_type(&key_ty)?;
-            r.skip_type(&value_ty)?;
+            key_ty.skip(r)?;
+            value_ty.skip(r)?;
         }
         Ok(())
     }
@@ -1407,7 +1417,7 @@ pub mod float {
 }
 
 pub mod u12 {
-    use super::{TdfDeserialize, TdfSerialize, TdfTyped};
+    use super::{Blob, TdfDeserialize, TdfSerialize, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
     };
@@ -1420,6 +1430,14 @@ pub mod u12 {
         pub data: [u8; 8],
         /// Associated string value
         pub value: &'de str,
+    }
+
+    impl U12<'_> {
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            r.skip_length(8)?;
+            Blob::skip(r)?;
+            Ok(())
+        }
     }
 
     impl<'de> TdfDeserialize<'de> for U12<'de> {

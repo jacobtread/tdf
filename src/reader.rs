@@ -6,16 +6,7 @@ use super::{
     tag::{Tag, Tagged, TdfType},
     types::{TdfDeserialize, TdfDeserializeOwned, TdfTyped},
 };
-use crate::types::{
-    blob::skip_blob,
-    float::skip_f32,
-    group::GroupSlice,
-    list::skip_list,
-    map::{deserialize_map_header, skip_map},
-    tagged_union::skip_tagged_union,
-    var_int::skip_var_int,
-    ObjectId, ObjectType, VarIntList,
-};
+use crate::{tag::RawTag, types::map::deserialize_map_header};
 
 /// Buffered readable implementation. Allows reading through the
 /// underlying slice using a cursor and with a position that can
@@ -34,62 +25,60 @@ impl<'de> TdfDeserializer<'de> {
         Self { buffer, cursor: 0 }
     }
 
-    pub fn until_tag(&mut self, tag: &[u8], ty: TdfType) -> DecodeResult<()> {
-        let tag = Tag::from(tag);
-        loop {
-            let next_tag = match Tagged::deserialize_owned(self) {
-                Ok(value) => value,
-                Err(DecodeError::UnexpectedEof { .. }) => {
-                    return Err(DecodeError::MissingTag { tag, ty })
-                }
-                Err(err) => return Err(err),
-            };
+    /// Reads all tags through the buffer until it encounters
+    /// a matching tag returning the type of the tag or None
+    fn internal_until_tag(&mut self, tag: &Tag) -> DecodeResult<Option<TdfType>> {
+        while !self.is_empty() {
+            let tagged = Tagged::deserialize_owned(self)?;
 
-            if next_tag.tag != tag {
-                self.skip_type(&next_tag.ty)?;
-                continue;
+            // Tag matches return it
+            if tagged.tag.eq(tag) {
+                return Ok(Some(tagged.ty));
             }
 
-            if next_tag.ty.ne(&ty) {
-                return Err(DecodeError::InvalidTagType {
-                    tag,
-                    expected: ty,
-                    actual: next_tag.ty,
-                });
-            }
-
-            return Ok(());
+            // Skip the tag and keep reading
+            tagged.ty.skip(self)?;
         }
+
+        Ok(None)
     }
 
-    pub fn try_until_tag(&mut self, tag: &[u8], ty: TdfType) -> bool {
+    pub fn until_tag(&mut self, tag: RawTag, ty: TdfType) -> DecodeResult<()> {
+        let tag = Tag::from(tag);
+        let tag_ty = self
+            .internal_until_tag(&tag)?
+            .ok_or(DecodeError::MissingTag { tag, ty })?;
+
+        if tag_ty != ty {
+            return Err(DecodeError::InvalidTagType {
+                tag,
+                expected: ty,
+                actual: tag_ty,
+            });
+        }
+
+        Err(DecodeError::MissingTag { tag, ty })
+    }
+
+    pub fn try_until_tag(&mut self, tag: RawTag, ty: TdfType) -> DecodeResult<bool> {
         let tag = Tag::from(tag);
         let start = self.cursor;
+        let exists = self
+            .internal_until_tag(&tag)?
+            .is_some_and(|value| value.eq(&ty));
 
-        while let Ok(next_tag) = Tagged::deserialize_owned(self) {
-            if next_tag.tag != tag {
-                if self.skip_type(&next_tag.ty).is_err() {
-                    break;
-                } else {
-                    continue;
-                }
-            }
-
-            if next_tag.ty.ne(&ty) {
-                break;
-            }
-
-            return true;
+        if !exists {
+            self.cursor = start;
         }
-        self.cursor = start;
-        false
+
+        Ok(exists)
     }
 
     /// Reads the provided tag from the buffer discarding values until it
     /// reaches the correct value.
     ///
     /// `tag` The tag name to read
-    pub fn tag<C>(&mut self, tag: &[u8]) -> DecodeResult<C>
+    pub fn tag<C>(&mut self, tag: RawTag) -> DecodeResult<C>
     where
         C: TdfDeserialize<'de> + TdfTyped,
     {
@@ -102,75 +91,20 @@ impl<'de> TdfDeserializer<'de> {
     /// back to where it was
     ///
     /// `tag` The tag name to read
-    pub fn try_tag<C>(&mut self, tag: &[u8]) -> DecodeResult<Option<C>>
+    pub fn try_tag<C>(&mut self, tag: RawTag) -> DecodeResult<Option<C>>
     where
         C: TdfDeserialize<'de> + TdfTyped,
     {
-        let start = self.cursor;
-        match self.tag(tag) {
-            Ok(value) => Ok(Some(value)),
-            Err(DecodeError::MissingTag { .. }) => {
-                self.cursor = start;
-                Ok(None)
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    /// Reads the next TdfType value checking that it
-    /// matches the provided type and returns an invalid
-    /// type error if the type doesn't match
-    pub fn expect_type(&mut self, ty: TdfType) -> DecodeResult<()> {
-        let value_type = TdfType::deserialize_owned(self)?;
-
-        if value_type != ty {
-            Err(DecodeError::InvalidType {
-                expected: ty,
-                actual: value_type,
-            })
+        let exists = self.try_until_tag(tag, C::TYPE)?;
+        Ok(if exists {
+            let value = C::deserialize(self)?;
+            Some(value)
         } else {
-            Ok(())
-        }
+            None
+        })
     }
 
-    /// Skips the provided length in bytes on the underlying
-    /// buffer returning an error if there is not enough space
-    pub fn skip_length(&mut self, length: usize) -> DecodeResult<()> {
-        self.expect_length(length)?;
-        self.cursor += length;
-        Ok(())
-    }
-
-    /// Skips the next tag value
-    pub fn skip_tag(&mut self) -> DecodeResult<()> {
-        let tag = Tagged::deserialize_owned(self)?;
-        self.skip_type(&tag.ty)
-    }
-
-    /// Skips a data type
-    ///
-    /// `ty` The type of data to skip
-    pub fn skip_type(&mut self, ty: &TdfType) -> DecodeResult<()> {
-        match ty {
-            TdfType::VarInt => skip_var_int(self)?,
-            TdfType::String | TdfType::Blob => skip_blob(self)?,
-            TdfType::Group => GroupSlice::skip(self)?,
-            TdfType::List => skip_list(self)?,
-            TdfType::Map => skip_map(self)?,
-            TdfType::TaggedUnion => skip_tagged_union(self)?,
-            TdfType::VarIntList => VarIntList::skip(self)?,
-            TdfType::ObjectType => ObjectType::skip(self)?,
-            TdfType::ObjectId => ObjectId::skip(self)?,
-            TdfType::Float => skip_f32(self)?,
-            TdfType::U12 => {
-                self.skip_length(8)?;
-                skip_blob(self)?; // string
-            }
-        }
-        Ok(())
-    }
-
-    pub fn until_list(&mut self, tag: &[u8], value_type: TdfType) -> DecodeResult<usize> {
+    pub fn until_list(&mut self, tag: RawTag, value_type: TdfType) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::List)?;
         let list_type = TdfType::deserialize_owned(self)?;
         if list_type != value_type {
@@ -185,7 +119,7 @@ impl<'de> TdfDeserializer<'de> {
 
     pub fn until_map(
         &mut self,
-        tag: &[u8],
+        tag: RawTag,
         key_type: TdfType,
         value_type: TdfType,
     ) -> DecodeResult<usize> {
@@ -249,6 +183,20 @@ impl<'de> TdfDeserializer<'de> {
         bytes.copy_from_slice(slice);
 
         Ok(bytes)
+    }
+
+    /// Skips the provided length in bytes on the underlying
+    /// buffer returning an error if there is not enough space
+    pub fn skip_length(&mut self, length: usize) -> DecodeResult<()> {
+        self.expect_length(length)?;
+        self.cursor += length;
+        Ok(())
+    }
+
+    /// Skips the next tag value
+    pub fn skip_tag(&mut self) -> DecodeResult<()> {
+        let tag = Tagged::deserialize_owned(self)?;
+        tag.ty.skip(self)
     }
 
     /// Returns the remaining length left after the cursor
