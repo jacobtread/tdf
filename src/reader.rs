@@ -40,7 +40,7 @@ impl<'de> TdfDeserializer<'de> {
             let tagged = Tagged::deserialize_owned(self)?;
 
             // Skip tags that don't match
-            if tagged.tag.ne(&tag) {
+            if tagged.tag != tag {
                 tagged.ty.skip(self)?;
                 continue;
             }
@@ -225,5 +225,61 @@ impl<'de> TdfDeserializer<'de> {
     /// Returns if there is nothing left after the cursor
     pub fn is_empty(&self) -> bool {
         self.cursor >= self.buffer.len()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::writer::TdfSerializer;
+
+    use super::TdfDeserializer;
+
+    #[test]
+    fn test_nested_struct() {
+        // Create a nested structure to read
+        let w = {
+            let mut w = Vec::new();
+            w.group(b"OUTR", |w| {
+                w.tag_u32(b"VALU", 12);
+                w.group(b"INNR", |w| {
+                    w.tag_u32(b"GOAL", 34);
+                });
+
+                // Value shouldn't be reached
+                w.tag_u32(b"NOPA", 50);
+            });
+
+            // Value shouldn't be reached
+            w.tag_u32(b"NOPB", 24);
+
+            w
+        };
+
+        let mut r = TdfDeserializer::new(&w);
+
+        // NOPA shouldn't be accessible from this depth
+        assert_eq!(r.try_tag::<u32>(b"NOPA").unwrap(), None);
+
+        r.group(b"OUTR", |_, r| {
+            let tes2: u32 = r.tag(b"VALU")?;
+            assert_eq!(tes2, 12);
+
+            r.group(b"INNR", |_, r| {
+                let goal: u32 = r.tag(b"GOAL")?;
+                assert_eq!(goal, 34);
+
+                assert_eq!(r.try_tag::<u32>(b"NOPA").unwrap(), None);
+                Ok(())
+            })?;
+
+            // NOPB shouldn't be accessible from this depth
+            assert_eq!(r.try_tag::<u32>(b"NOPB").unwrap(), None);
+
+            Ok(())
+        })
+        .unwrap();
+
+        let nop2: u32 = r.tag(b"NOPB").unwrap();
+        assert_eq!(nop2, 24);
     }
 }

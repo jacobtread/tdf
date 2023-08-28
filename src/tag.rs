@@ -14,14 +14,18 @@ use crate::{
 use super::error::DecodeError;
 use std::fmt::{Debug, Display, Write};
 
-/// Represents a raw byte tag string for example:
+/// Represents a raw byte tag string for example :
 /// ```
 /// let tag: &[u8] = b"TEST";
 /// ```
+///
+/// Tags can only contain A-Z and cannot be longer than 4 characters
+/// numbers may not be encoded correctly
 pub type RawTag<'a> = &'a [u8];
 
 /// Represents the tag for a tagged value. Contains the
 /// tag itself and the type of value stored after
+#[derive(Debug)]
 pub struct Tagged {
     /// The decoded tag
     pub tag: Tag,
@@ -30,7 +34,7 @@ pub struct Tagged {
 }
 
 impl Tagged {
-    pub fn serialize_raw<S: TdfSerializer>(w: &mut S, tag: &[u8], value_type: TdfType) {
+    pub fn serialize_raw<S: TdfSerializer>(w: &mut S, tag: RawTag, value_type: TdfType) {
         let mut output: [u8; 4] = [0, 0, 0, value_type as u8];
         let length: usize = tag.len();
         if length > 0 {
@@ -87,11 +91,11 @@ impl TdfDeserializeOwned for Tagged {
 }
 
 /// Decoded tag bytes type
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Tag(pub [u8; 4]);
 
-impl From<&[u8]> for Tag {
-    fn from(value: &[u8]) -> Self {
+impl From<RawTag<'_>> for Tag {
+    fn from(value: RawTag) -> Self {
         let mut out = [0u8; 4];
 
         // Only copy the max of 4 bytes
@@ -105,6 +109,12 @@ impl From<&[u8]> for Tag {
 impl From<&[u8; 4]> for Tag {
     fn from(value: &[u8; 4]) -> Self {
         Self(*value)
+    }
+}
+
+impl Debug for Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Tag({:?} {})", self.0, self)
     }
 }
 
