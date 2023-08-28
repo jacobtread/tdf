@@ -139,8 +139,10 @@ use crate::{
 /// [TdfSerializer] provides functions for writing tag values to a buffer for serialization.
 /// See [module documentation](crate::writer) for usage
 pub trait TdfSerializer: Sized {
+    /// Internal function for writing a single byte to the serializer
     fn write_byte(&mut self, value: u8);
 
+    /// Internal function for writing a slice of bytes to the serializer
     fn write_slice(&mut self, value: &[u8]);
 
     /// Serializes the provided tag and value from a

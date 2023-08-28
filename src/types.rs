@@ -1630,9 +1630,8 @@ pub mod u12 {
 }
 
 pub mod group {
-    use crate::{error::DecodeResult, reader::TdfDeserializer, tag::Tagged};
-
     use super::TdfDeserialize;
+    use crate::{error::DecodeResult, reader::TdfDeserializer, tag::Tagged};
 
     /// [GroupSlice] is a slice of bytes representing a group tdf that hasn't
     /// been decoded into its inner tags
