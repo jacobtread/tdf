@@ -1,3 +1,227 @@
+//! Deserialization and reading for the Tdf format
+//!
+//! This module provides a reader [TdfDeserializer] structure for reading
+//! tags from a buffer.
+//!
+//! ## Creating a deserializer
+//!
+//! You can create a deserializer using [TdfDeserializer::new] on a slice of bytes
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! ```
+//!
+//! ## Basic Reading
+//!
+//! Unlike the [TdfSerializer](crate::writer::TdfSerializer) this deserializer doesn't provide
+//! functions for deserializing specific types. Instead there is just one [tag](TdfDeserializer::tag)
+//! function (and the other associated variants)
+//!
+//! ### Tag reading
+//!
+//! To read a deserializable value from the buffer you can use the [tag](TdfDeserializer::tag) function
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! let my_value: u32 = r.tag(b"TEST").unwrap();
+//!
+//! ```
+//!
+//! > **Note**
+//! > Type annotates are important when deserializing values
+//!
+//! [tag](TdfDeserializer::tag) Will return an error if the specific tag is
+//! not present in the buffer, see [try_tag](TdfDeserializer::try_tag) for tags
+//! that might not be present
+//!   
+//! ### Group reading
+//!
+//! To read within groups yo can use the [group](TdfDeserializer::group) function
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! r.group(b"TEST", |_, r| {
+//!     let tag: u32 = r.tag(b"INNR")?;
+//!
+//!     Ok(())
+//! })
+//! .unwrap();
+//!
+//! ```
+//!
+//! The group function takes in an action function which will be executed within
+//! the reading context of the group (You can read values from the group but not values outside)
+//!
+//! The first argument to the group function is a boolean which indicates whether the group
+//! was prefixed with a (2)
+//!
+//! The group function will return any values that the action function returns. The action
+//! function accepts [FnMut] so it's also allowed to modify surrounding variables:
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! // Returning a value from the group
+//! let value = r.group(b"TEST", |_, r| {
+//!     let tag: u32 = r.tag(b"INNR")?;
+//!
+//!     Ok(tag)
+//! })
+//! .unwrap();
+//!
+//! // Returning multiple values from the group
+//! let (a, b, c) = r.group(b"TEST", |_, r| {
+//!     let a: u32 = r.tag(b"A")?;
+//!     let b: u32 = r.tag(b"B")?;
+//!     let c: u32 = r.tag(b"C")?;
+//!
+//!     Ok((a, b, c))
+//! })
+//! .unwrap();
+//!
+//! let mut my_var = 1;
+//!
+//! // Modifying variables from the group
+//! r.group(b"TEST", |_, r| {
+//!     my_var = r.tag(b"A")?;
+//!
+//!     Ok(())
+//! })
+//! .unwrap();
+//! ```
+//!
+//! ### Optional tag reading
+//!
+//! Sometimes tags aren't always present in the serialized message, to handle tags that might not
+//! always show up you can use the [try_tag](TdfDeserializer::try_tag) function
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! let my_value: Option<u32> = r.try_tag(b"TEST").unwrap();
+//!
+//! ```
+//!
+//! ## Complex Reading
+//!
+//! ### Reading complex lists
+//!
+//! When reading complex list elements instead of reading all the values you may want
+//! to just read one value or do some complex operation. To do this you can instead
+//! read the header of a list and then manually implement the value reading. You can
+//! do this using [until_list](TdfDeserializer::until_list)
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! let length: usize = r.until_list(b"LIST").unwrap();
+//!
+//! for i in 0..length {
+//!     // Read complex items
+//! }
+//!
+//! // Dont forget to read ALL of the items or an error will occur
+//! ```
+//!
+//! ### Reading complex maps
+//!
+//! When reading complex map elements instead of reading all the key values you may want
+//! to just read one key value or do some complex operation. To do this you can instead
+//! read the header of a map and then manually implement the value reading. You can
+//! do this using [until_map](TdfDeserializer::until_map)
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! let (key_ty, value_ty, length): usize = r.until_map(b"LIST").unwrap();
+//!
+//! for i in 0..length {
+//!     // Read key
+//!     // Read value
+//! }
+//!
+//! // Dont forget to read ALL of the items or an error will occur
+//! ```
+//!
+//! The above until_map function doesn't check the types for the key and value instead it
+//! provides them to you. If you would like to have the types be a specific type you can use
+//! the [until_map_typed](TdfDeserializer::until_map_typed) function.
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//! use tdf::tag::TdfType;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! // Specify the key value types must be strings
+//! let length: usize = r.until_map_typed(b"LIST", TdfType::String, TdfType::String).unwrap();
+//!
+//! for i in 0..length {
+//!     // Read key
+//!     // Read value
+//! }
+//!
+//! // Dont forget to read ALL of the items or an error will occur
+//! ```
+//!
+//! ### Until tag
+//!
+//! > **Warning**
+//! > You shouldn't use until_tag or try_until_tag unless you have a clear understanding of the structure you're reading
+//! > see the attached warning below for the reason
+//!
+//! For complex tags like TaggedUnions or if you just want to move the cursor to just after
+//! a tag you can use the [until_tag](TdfDeserializer::until_tag) or the [try_until_tag](TdfDeserializer::try_until_tag)
+//! to attempt to find that tag
+//!
+//! > `try_until_tag` will attempt to find the tag and if it fails to find the tag it will reset
+//! > the cursor position and return false instead
+//!
+//! ```
+//! use tdf::reader::TdfDeserializer;
+//!
+//! let buffer = &[/* Example byte slice buffer */];
+//! let mut r = TdfDeserializer::new(buffer);
+//!
+//! r.until_tag(b"TEST").unwrap();
+//! /* Operate on TEST */
+//!
+//! let exists = r.try_until_tag(b"BIN").unwrap();
+//! if exists {
+//!    /* Tag exists, operate on it */
+//! }
+//! ```
+//!
+//! > **Warning**
+//! > When manully reading up to tags ensure that you correctly read all of the tag bytes
+//! > or skip the value using [TdfType::skip] (If you have already started reading the structure this may not function correctly)
+//! > if you don't completely read the tag structure the buffer will be unable to correctly finish reading
+
 use super::{
     error::{DecodeError, DecodeResult},
     tag::{Tag, Tagged, TdfType},
@@ -9,7 +233,9 @@ use crate::{
 };
 
 pub struct TdfDeserializer<'de> {
+    /// Buffer storing the bytes to be deserialized
     pub(crate) buffer: &'de [u8],
+    /// Cursor representing the current offset within the buffer
     pub(crate) cursor: usize,
     /// Group indentation counter, used to count depth for tag searching
     pub(crate) group: u8,
@@ -135,15 +361,20 @@ impl<'de> TdfDeserializer<'de> {
         Ok(count)
     }
 
-    pub fn until_map(
+    #[inline]
+    pub fn until_map(&mut self, tag: RawTag) -> DecodeResult<(TdfType, TdfType, usize)> {
+        self.until_tag(tag, TdfType::Map)?;
+        deserialize_map_header(self)
+    }
+
+    pub fn until_map_typed(
         &mut self,
         tag: RawTag,
         key_type: TdfType,
         value_type: TdfType,
-    ) -> DecodeResult<usize> {
+    ) -> DecodeResult<(TdfType, TdfType, usize)> {
         self.until_tag(tag, TdfType::Map)?;
-
-        let (key_ty, value_ty, length) = deserialize_map_header(self)?;
+        let (key_ty, value_ty, length) = self.until_map(tag)?;
 
         if key_ty != key_type {
             return Err(DecodeError::InvalidType {
@@ -159,7 +390,7 @@ impl<'de> TdfDeserializer<'de> {
             });
         }
 
-        Ok(length)
+        Ok((key_ty, value_ty, length))
     }
 
     fn expect_length(&self, length: usize) -> DecodeResult<()> {
@@ -188,7 +419,6 @@ impl<'de> TdfDeserializer<'de> {
         Ok(slice)
     }
 
-    /// Moves the cursor back 1 byte
     pub(crate) fn move_cursor_back(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
     }
@@ -203,26 +433,21 @@ impl<'de> TdfDeserializer<'de> {
         Ok(bytes)
     }
 
-    /// Skips the provided length in bytes on the underlying
-    /// buffer returning an error if there is not enough space
     pub(crate) fn skip_length(&mut self, length: usize) -> DecodeResult<()> {
         self.expect_length(length)?;
         self.cursor += length;
         Ok(())
     }
 
-    /// Skips the next tag value
     pub(crate) fn skip_tag(&mut self) -> DecodeResult<()> {
         let tag = Tagged::deserialize_owned(self)?;
         tag.ty.skip(self)
     }
 
-    /// Returns the remaining length left after the cursor
     pub fn len(&self) -> usize {
         self.buffer.len() - self.cursor
     }
 
-    /// Returns if there is nothing left after the cursor
     pub fn is_empty(&self) -> bool {
         self.cursor >= self.buffer.len()
     }
