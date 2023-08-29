@@ -146,8 +146,8 @@ fn impl_type_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
         .expect("Non-tagged enums require #[repr({ty})] to be specified");
 
     quote! {
-        impl TdfTyped for #ident {
-            const TYPE: TdfType = <#repr as TdfTyped>::TYPE;
+        impl tdf::TdfTyped for #ident {
+            const TYPE: tdf::TdfType = <#repr as tdf::TdfTyped>::TYPE;
         }
     }
     .into()
@@ -214,8 +214,8 @@ fn impl_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream 
     }
 
     quote! {
-        impl #generics TdfSerialize for #ident #generics #where_clause {
-            fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+        impl #generics tdf::TdfSerialize for #ident #generics #where_clause {
+            fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
                 #leading
                 #(#serialize_impls)*
                 #trailing
@@ -231,8 +231,8 @@ fn impl_serialize_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStrea
         .expect("Non-tagged enums require #[repr({ty})] to be specified");
 
     quote! {
-        impl TdfSerializeOwned for #ident {
-            fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
+        impl tdf::TdfSerializeOwned for #ident {
+            fn serialize_owned<S: tdf::TdfSerializer>(self, w: &mut S) {
                 <#repr as tdf::TdfSerializeOwned>::serialize_owned(self as #repr, w);
             }
         }
@@ -321,7 +321,7 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                     quote! {
                         Self::#var_ident { #field_names } => {
                             w.write_byte(#discriminant);
-                            Tagged::serialize_raw(w, #value_tag, TdfType::Group);
+                            tdf::Tagged::serialize_raw(w, #value_tag, tdf::TdfType::Group);
 
                             #leading
                             #(#impls)*
@@ -345,7 +345,7 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                     quote! {
                         Self::#var_ident(value) => {
                             w.write_byte(#discriminant);
-                            Tagged::serialize_raw(w, #value_tag, <#field_ty as TdfTyped>::TYPE);
+                            tdf::Tagged::serialize_raw(w, #value_tag, <#field_ty as tdf::TdfTyped>::TYPE);
 
                             <#field_ty as tdf::TdfSerialize>::serialize(value, w);
                         }
@@ -499,8 +499,8 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
     );
 
     quote! {
-        impl TdfDeserialize<'_> for #ident {
-            fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+        impl tdf::TdfDeserialize<'_> for #ident {
+            fn deserialize(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
                 let value = <#repr>::deserialize(r)?;
                 Ok(match value {
                     #(#variant_cases,)*
