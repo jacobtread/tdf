@@ -2,8 +2,8 @@ use darling::FromAttributes;
 use proc_macro::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    parse_macro_input, Attribute, DataEnum, DataStruct, DeriveInput, Expr, Ident, Lifetime,
-    LifetimeParam,
+    parse_macro_input, Attribute, DataEnum, DataStruct, DeriveInput, Expr, Generics, Ident,
+    Lifetime, LifetimeParam,
 };
 
 #[derive(Debug, FromAttributes)]
@@ -348,23 +348,30 @@ fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
     .into()
 }
 
+fn get_deserialize_lifetime(generics: &Generics) -> LifetimeParam {
+    let mut lifetimes = generics.lifetimes();
+
+    let lifetime = lifetimes
+        .next()
+        .cloned()
+        // Use a default 'de lifetime while deserializing when no lifetime is provided
+        .unwrap_or_else(|| LifetimeParam::new(Lifetime::new("'de", Span::call_site().into())));
+
+    if lifetimes.next().is_some() {
+        panic!("Deserializable structs cannot have more than one lifetime")
+    }
+
+    lifetime
+}
+
 fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
     let attr =
         TdfStructAttr::from_attributes(&input.attrs).expect("Failed to parse tdf struct attrs");
 
     let ident = &input.ident;
+
     let generics = &input.generics;
-
-    let mut lifetimes = input.generics.lifetimes();
-    let lifetime = lifetimes.next();
-
-    if lifetimes.next().is_some() {
-        panic!(
-            "{} has more than one lifetime, cannot derive TdfDeserialize",
-            input.ident
-        );
-    }
-
+    let lifetime = get_deserialize_lifetime(generics);
     let where_clause = generics.where_clause.as_ref();
 
     let field_idents = data.fields.iter().filter_map(|field| field.ident.as_ref());
@@ -391,10 +398,6 @@ fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStrea
             }
         });
 
-    let default_lifetime = LifetimeParam::new(Lifetime::new("'_", Span::call_site().into()));
-
-    let lifetime = lifetime.unwrap_or(&default_lifetime);
-
     let mut leading = None;
     let mut trailing = None;
 
@@ -404,8 +407,8 @@ fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStrea
     }
 
     quote! {
-        impl #generics TdfDeserialize<#lifetime> for #ident #generics #where_clause {
-            fn deserialize(r: &mut TdfDeserializer<#lifetime>) -> DecodeResult<Self> {
+        impl #generics tdf::TdfDeserialize<#lifetime> for #ident #generics #where_clause {
+            fn deserialize(r: &mut tdf::TdfDeserializer<#lifetime>) -> tdf::DecodeResult<Self> {
                 #leading
                 #(#field_impls)*
                 #trailing
@@ -496,6 +499,10 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
 fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     let mut unset_handling = None;
     let mut default_handling = None;
+
+    let generics = &input.generics;
+    let lifetime = get_deserialize_lifetime(generics);
+    let where_clause = generics.where_clause.as_ref();
 
     let field_impls: Vec<_> = data
         .variants
@@ -621,8 +628,8 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
     let ident = &input.ident;
 
     quote! {
-        impl tdf::TdfDeserialize<'_> for #ident {
-            fn deserialize(r: &mut tdf::TdfDeserializer<'_>) -> DecodeResult<Self> {
+        impl #generics TdfDeserialize<#lifetime> for #ident #generics #where_clause {
+            fn deserialize(r: &mut TdfDeserializer<#lifetime>) -> DecodeResult<Self> {
                 let discriminant = <u8 as tdf::TdfDeserialize<'_>>::deserialize(r)?;
 
                 if discriminant == tdf::types::tagged_union::TAGGED_UNSET_KEY {
