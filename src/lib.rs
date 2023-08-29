@@ -69,10 +69,18 @@ pub enum TestEnumFallback {
     Unknown = 0x3,
 }
 
-#[derive(TdfSerialize, TdfDeserialize)]
-#[tdf(repr = u8)]
-#[repr(u8)]
+#[derive(TdfDeserialize)]
+#[tdf(tagged)]
 pub enum TestTaggedEnum {
-    Value = 0x1,
-    Test = 0x2,
+    #[tdf(key = 0x1, tag = b"TEST")]
+    Value {
+        #[tdf(tag = b"VALU")]
+        key: String,
+    },
+    #[tdf(key = 0x2, tag = b"TEST")]
+    Value2(String),
+    #[tdf(default)]
+    Test,
+    #[tdf(unset)]
+    Test2,
 }
