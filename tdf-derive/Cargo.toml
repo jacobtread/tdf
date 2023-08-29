@@ -14,6 +14,7 @@ readme.workspace = true
 darling = "0.20"
 quote = "1"
 syn = { version = "2", features = ["full"] }
+proc-macro2 = "1"
 
 [lib]
 proc-macro = true

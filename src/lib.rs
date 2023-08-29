@@ -75,7 +75,7 @@ pub enum TestEnumFallback {
 pub enum TestTaggedEnum {
     #[tdf(key = 0x1, tag = b"TEST", prefix_two)]
     Value {
-        #[tdf(tag = b"VALU")]
+        #[tdf(tag = b"VALU", skip)]
         key: String,
     },
     #[tdf(key = 0x2, tag = b"TEST")]
