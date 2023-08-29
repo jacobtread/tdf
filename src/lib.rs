@@ -24,23 +24,26 @@ pub use types::{
 };
 pub use writer::TdfSerializer;
 
-use tdf_derive::{TdfDeserialize, TdfSerialize};
+use tdf_derive::{TdfDeserialize, TdfSerialize, TdfTyped};
 
 use crate as tdf;
 
-#[derive(TdfSerialize)]
+#[derive(TdfSerialize, TdfTyped)]
+#[tdf(group)]
 pub struct Example {
     #[tdf(tag = b"ABCD")]
     pub example: u32,
 }
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
+#[tdf(group)]
 pub struct ExampleWithLifetime<'a> {
     #[tdf(tag = b"ABCD")]
     pub example: &'a str,
 }
 
-#[derive(TdfSerialize)]
+#[derive(TdfSerialize, TdfTyped)]
+#[tdf(group)]
 pub struct ExampleWithLifetimeGeneric<'a, T>
 where
     T: TdfSerialize + TdfTyped,
@@ -51,14 +54,14 @@ where
     pub alt: T,
 }
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u8)]
 pub enum TestEnum {
     Value = 0x1,
     Test = 0x2,
 }
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u16)]
 pub enum TestEnumFallback {
     Value = 0x1,
@@ -67,7 +70,7 @@ pub enum TestEnumFallback {
     Unknown = 0x3,
 }
 
-#[derive(TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(tagged)]
 pub enum TestTaggedEnum {
     #[tdf(key = 0x1, tag = b"TEST")]
