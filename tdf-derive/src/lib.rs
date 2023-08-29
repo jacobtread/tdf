@@ -3,7 +3,7 @@ use proc_macro::{Span, TokenStream};
 use quote::quote;
 use syn::{
     parse_macro_input, Attribute, DataEnum, DataStruct, DeriveInput, Expr, Field, Generics, Ident,
-    Lifetime, LifetimeParam, Variant,
+    Lifetime, LifetimeParam,
 };
 
 #[derive(Debug, FromAttributes)]
@@ -123,9 +123,10 @@ fn impl_type_struct(input: &DeriveInput, _data: &DataStruct) -> TokenStream {
     let attr =
         TdfStructAttr::from_attributes(&input.attrs).expect("Failed to parse tdf struct attrs");
 
-    if !attr.group {
-        panic!("Cannot derive TdfTyped on non group struct, type is unknown");
-    }
+    assert!(
+        attr.group,
+        "Cannot derive TdfTyped on non group struct, type is unknown"
+    );
 
     let ident = &input.ident;
     let generics = &input.generics;
@@ -328,9 +329,12 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                         value_tag.expect("Unnamed tagged enum variants need a value tag");
 
                     let fields = &fields.unnamed;
-                    if fields.len() > 1 {
-                        panic!("Tagged union cannot have more than one unnamed field");
-                    }
+
+                    assert!(
+                        fields.len() == 1,
+                        "Tagged union cannot have more than one unnamed field"
+                    );
+
                     let field = fields.first().unwrap();
                     let field_ty = &field.ty;
 
@@ -343,9 +347,10 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                     }
                 }
                 syn::Fields::Unit => {
-                    if !attr.unset && !attr.default {
-                        panic!("Only unset or default enum variants can have no content")
-                    }
+                    assert!(
+                        attr.unset || attr.default,
+                        "Only unset or default enum variants can have no content"
+                    );
 
                     quote! {
                         Self::#var_ident => {
@@ -384,9 +389,10 @@ fn get_deserialize_lifetime(generics: &Generics) -> LifetimeParam {
         // Use a default '_ lifetime while deserializing when no lifetime is provided
         .unwrap_or_else(|| LifetimeParam::new(Lifetime::new("'_", Span::call_site().into())));
 
-    if lifetimes.next().is_some() {
-        panic!("Deserializable structs cannot have more than one lifetime")
-    }
+    assert!(
+        lifetimes.next().is_none(),
+        "Deserializable structs cannot have more than one lifetime"
+    );
 
     lifetime
 }
@@ -474,9 +480,10 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                 return true;
             }
 
-            if default.is_some() {
-                panic!("Cannot have more than one default variant");
-            }
+            assert!(
+                default.is_none(),
+                "Cannot have more than one default variant"
+            );
 
             let ident = &variant.ident;
 
@@ -572,6 +579,11 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
 
             match &variant.fields {
                 syn::Fields::Named(fields) => {
+                    assert!(
+                        !attr.unset,
+                        "Enum variants with fields cannot be used as the unset variant"
+                    );
+
                     // Named variants must be group type
 
                     value_tag.expect("Named tagged enums are groups and need a value tag");
@@ -596,10 +608,18 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                 }
                 // Unnamed may not be group type, use type from value
                 syn::Fields::Unnamed(fields) => {
+                    assert!(
+                        !attr.unset,
+                        "Enum variants with fields cannot be used as the unset variant"
+                    );
+
                     let fields = &fields.unnamed;
-                    if fields.len() > 1 {
-                        panic!("Tagged union cannot have more than one unnamed field");
-                    }
+
+                    assert!(
+                        fields.len() == 1,
+                        "Tagged union cannot have more than one unnamed field"
+                    );
+
                     let field = fields.first().unwrap();
                     let field_ty = &field.ty;
 
@@ -611,9 +631,10 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                     }
                 }
                 syn::Fields::Unit => {
-                    if !attr.unset && !attr.default {
-                        panic!("Only unset or default enum variants can have no content")
-                    }
+                    assert!(
+                        attr.unset || attr.default,
+                        "Only unset or default enum variants can have no content"
+                    );
 
                     quote! {
                         #discriminant => {
