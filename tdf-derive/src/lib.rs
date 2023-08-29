@@ -133,6 +133,17 @@ fn impl_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream 
     .into()
 }
 
+fn get_repr_attribute(attrs: &[Attribute]) -> Option<Ident> {
+    attrs
+        .iter()
+        .filter_map(|attr| attr.meta.require_list().ok())
+        .find(|value| value.path.is_ident("repr"))
+        .map(|attr| {
+            let value: Ident = attr.parse_args().expect("Failed to parse repr type");
+            value
+        })
+}
+
 fn impl_type_struct(input: &DeriveInput, _data: &DataStruct) -> TokenStream {
     let attr =
         TdfStructAttr::from_attributes(&input.attrs).expect("Failed to parse tdf struct attrs");
@@ -146,22 +157,11 @@ fn impl_type_struct(input: &DeriveInput, _data: &DataStruct) -> TokenStream {
     let where_clause = generics.where_clause.as_ref();
 
     quote! {
-        impl #generics TdfTyped for #ident #generics #where_clause {
+        impl #generics tdf::TdfTyped for #ident #generics #where_clause {
             const TYPE: tdf::TdfType = tdf::TdfType::Group;
         }
     }
     .into()
-}
-
-fn get_repr_attribute(attrs: &[Attribute]) -> Option<Ident> {
-    attrs
-        .iter()
-        .filter_map(|attr| attr.meta.require_list().ok())
-        .find(|value| value.path.is_ident("repr"))
-        .map(|attr| {
-            let value: Ident = attr.parse_args().expect("Failed to parse repr type");
-            value
-        })
 }
 
 fn impl_type_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
@@ -175,6 +175,33 @@ fn impl_type_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     } else {
         impl_type_repr_enum(input, data)
     }
+}
+
+fn impl_type_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
+    let ident = &input.ident;
+    let repr = get_repr_attribute(&input.attrs)
+        .expect("Non-tagged enums require #[repr({ty})] to be specified");
+
+    quote! {
+        impl TdfTyped for #ident {
+            const TYPE: TdfType = <#repr as TdfTyped>::TYPE;
+        }
+    }
+    .into()
+}
+
+fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
+    let ident = &input.ident;
+
+    let generics = &input.generics;
+    let where_clause = generics.where_clause.as_ref();
+
+    quote! {
+        impl #generics tdf::TdfTyped for #ident #generics #where_clause {
+            const TYPE: tdf::TdfType = tdf::TdfType::TaggedUnion;
+        }
+    }
+    .into()
 }
 
 fn impl_serialize_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
@@ -200,19 +227,6 @@ fn impl_serialize_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStrea
             fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
                 <#repr as tdf::TdfSerializeOwned>::serialize_owned(self as #repr, w);
             }
-        }
-    }
-    .into()
-}
-
-fn impl_type_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
-    let ident = &input.ident;
-    let repr = get_repr_attribute(&input.attrs)
-        .expect("Non-tagged enums require #[repr({ty})] to be specified");
-
-    quote! {
-        impl TdfTyped for #ident {
-            const TYPE: TdfType = <#repr as TdfTyped>::TYPE;
         }
     }
     .into()
@@ -332,17 +346,6 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                     #(#field_impls),*
                 }
             }
-        }
-    }
-    .into()
-}
-
-fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
-    let ident = &input.ident;
-
-    quote! {
-        impl tdf::TdfTyped for #ident {
-            const TYPE: tdf::TdfType = tdf::TdfType::TaggedUnion;
         }
     }
     .into()
