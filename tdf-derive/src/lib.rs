@@ -2,8 +2,8 @@ use darling::FromAttributes;
 use proc_macro::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    parse_macro_input, Attribute, DataEnum, DataStruct, DeriveInput, Expr, Field, Generics, Ident,
-    Lifetime, LifetimeParam,
+    parse_macro_input, punctuated::Punctuated, token::Comma, Attribute, DataEnum, DataStruct,
+    DeriveInput, Expr, Field, Fields, Generics, Ident, Lifetime, LifetimeParam,
 };
 
 #[derive(Debug, FromAttributes)]
@@ -256,44 +256,61 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
         .map(|(variant, attr)| {
             let var_ident = &variant.ident;
             let value_tag = attr.tag;
+            let is_unit = attr.unset || attr.default;
 
-            // TODO: Ensure no duplicates
+            // TODO: Ensure no duplicates & validate value tag matches
 
-            // TODO: Validate value tag matches
+            if let Fields::Unit = &variant.fields {
+                assert!(
+                    is_unit,
+                    "Only unset or default enum variants can have no content"
+                );
+
+                return quote! {
+                    Self::#var_ident => {
+                        w.write_byte(tdf::types::tagged_union::TAGGED_UNSET_KEY);
+                    }
+                };
+            }
+
+            assert!(
+                !is_unit,
+                "Enum variants with fields cannot be used as the default or unset variant"
+            );
+
+            let discriminant = attr.key.expect("Missing discriminant key");
+            let value_tag = value_tag.expect("Missing value tag");
 
             match &variant.fields {
-                syn::Fields::Named(fields) => {
-                    assert!(
-                        !attr.unset,
-                        "Enum variants with fields cannot be used as the unset variant"
-                    );
-
-                    let discriminant = attr.key.expect("Missing discriminant key");
-                    let value_tag = value_tag.expect("Missing value tag");
-
-                    let mut skip_impl: Option<proc_macro2::TokenStream> = None;
-                    let mut field_idents: Vec<&Ident> = Vec::new();
-                    let mut serialize_impls: Vec<proc_macro2::TokenStream> = Vec::new();
-
-                    for field in &fields.named {
-                        let attributes = TdfFieldAttrs::from_attributes(&field.attrs)
-                            .expect("Failed to parse tdf field attrs");
-                        if attributes.skip {
-                            if skip_impl.is_none() {
-                                skip_impl = Some(quote!(, ..))
+                // Variants with named fields are handled as groups
+                Fields::Named(fields) => {
+                    let (idents, impls): (Vec<_>, Vec<_>) = fields
+                        .named
+                        .iter()
+                        .filter_map(|field| {
+                            let attributes = TdfFieldAttrs::from_attributes(&field.attrs)
+                                .expect("Failed to parse tdf field attrs");
+                            if attributes.skip {
+                                return None;
                             }
-                            continue;
-                        }
 
-                        let ident = field.ident.as_ref().expect("Field missing ident");
+                            Some((field, attributes))
+                        })
+                        .map(|(field, attributes)| {
+                            let ident = field.ident.as_ref().expect("Field missing ident");
+                            let serialize = tag_field_serialize(field, attributes.tag, false);
+                            (ident, serialize)
+                        })
+                        .unzip();
 
-                        field_idents.push(ident);
-                        serialize_impls.push(tag_field_serialize(field, attributes.tag, false));
-                    }
-
-                    if field_idents.is_empty() && skip_impl.is_some() {
-                        skip_impl = Some(quote!(..));
-                    }
+                    // Handle how field names are listed
+                    let field_names: proc_macro2::TokenStream = if idents.is_empty() {
+                        quote!(..)
+                    } else if idents.len() != fields.named.len() {
+                        quote!(#(#idents,)* ..)
+                    } else {
+                        quote!(#(#idents),*)
+                    };
 
                     let mut leading = None;
 
@@ -302,62 +319,39 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                     }
 
                     quote! {
-                        Self::#var_ident { #(#field_idents),* #skip_impl } => {
-
+                        Self::#var_ident { #field_names } => {
                             w.write_byte(#discriminant);
                             Tagged::serialize_raw(w, #value_tag, TdfType::Group);
 
                             #leading
-
-                            #(#serialize_impls)*
-
+                            #(#impls)*
                             w.tag_group_end();
                         }
                     }
                 }
-                // Unnamed may not be group type, use type from value
-                syn::Fields::Unnamed(fields) => {
-                    assert!(
-                        !attr.unset,
-                        "Enum variants with fields cannot be used as the unset variant"
-                    );
 
-                    let discriminant = attr
-                        .key
-                        .expect("Non default/unset enum variants must have a discriminant key");
-                    let value_tag =
-                        value_tag.expect("Unnamed tagged enum variants need a value tag");
-
+                // Variants with unnamed fields are treated as the type of the first field (Only one field is allowed)
+                Fields::Unnamed(fields) => {
                     let fields = &fields.unnamed;
+                    let field = fields.first().expect("Unnamed tagged enum missing field");
 
                     assert!(
                         fields.len() == 1,
                         "Tagged union cannot have more than one unnamed field"
                     );
 
-                    let field = fields.first().unwrap();
                     let field_ty = &field.ty;
 
                     quote! {
                         Self::#var_ident(value) => {
                             w.write_byte(#discriminant);
                             Tagged::serialize_raw(w, #value_tag, <#field_ty as TdfTyped>::TYPE);
+
                             <#field_ty as tdf::TdfSerialize>::serialize(value, w);
                         }
                     }
                 }
-                syn::Fields::Unit => {
-                    assert!(
-                        attr.unset || attr.default,
-                        "Only unset or default enum variants can have no content"
-                    );
-
-                    quote! {
-                        Self::#var_ident => {
-                            w.write_byte(tdf::types::tagged_union::TAGGED_UNSET_KEY);
-                        }
-                    }
-                }
+                Fields::Unit => unreachable!("Unit types should already be handled above"),
             }
         })
         .collect();
@@ -429,11 +423,8 @@ fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStrea
     let lifetime = get_deserialize_lifetime(generics);
     let where_clause = generics.where_clause.as_ref();
 
-    let field_idents = data
-        .fields
-        .iter()
-        .filter_map(|field: &Field| field.ident.as_ref());
-    let field_impls = data.fields.iter().map(tag_field_deserialize);
+    let idents = data.fields.iter().filter_map(|field| field.ident.as_ref());
+    let impls = data.fields.iter().map(tag_field_deserialize);
 
     let mut leading = None;
     let mut trailing = None;
@@ -449,10 +440,10 @@ fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStrea
         impl #generics tdf::TdfDeserialize<#lifetime> for #ident #generics #where_clause {
             fn deserialize(r: &mut tdf::TdfDeserializer<#lifetime>) -> tdf::DecodeResult<Self> {
                 #leading
-                #(#field_impls)*
+                #(#impls)*
                 #trailing
                 Ok(Self {
-                    #(#field_idents)*
+                    #(#idents),*
                 })
             }
         }
@@ -498,9 +489,7 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                 .as_ref()
                 .expect("Repr enum variants must include a descriminant for each value");
 
-            quote! {
-                #discriminant => Self::#var_ident,
-            }
+            quote! ( #discriminant => Self::#var_ident )
         })
         .collect();
 
@@ -514,7 +503,7 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
             fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
                 let value = <#repr>::deserialize(r)?;
                 Ok(match value {
-                    #(#variant_cases)*
+                    #(#variant_cases,)*
                     #default
                 })
             }
@@ -524,14 +513,14 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
 }
 
 fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
-    let mut unset_handling = None;
-    let mut default_handling = None;
-
     let generics = &input.generics;
     let lifetime = get_deserialize_lifetime(generics);
     let where_clause = generics.where_clause.as_ref();
 
-    let field_impls: Vec<_> = data
+    let mut has_unset = false;
+    let mut has_default = false;
+
+    let mut impls: Punctuated<proc_macro2::TokenStream, Comma> = data
         .variants
         .iter()
         .map(|variant| {
@@ -539,138 +528,120 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                 TdfTaggedEnumVariantAttr::from_attributes(&variant.attrs)
                     .expect("Failed to parse tdf field attrs");
 
-            (variant, attr)
-        })
-        .filter(|(variant, attr)| {
-            if attr.unset || attr.default {
-                let var_ident = &variant.ident;
+            let var_ident = &variant.ident;
+            let is_unit = attr.unset || attr.default;
+
+            if let Fields::Unit = &variant.fields {
                 assert!(
-                    matches!(variant.fields, syn::Fields::Unit),
-                    "Default/Unset enum values must use the unit structure"
+                    is_unit,
+                    "Only unset or default enum variants can have no content"
                 );
 
-                if attr.unset {
-                    unset_handling = quote! {
-                        return Ok(Self::#var_ident);
+                assert!(
+                    !(attr.default && attr.unset),
+                    "Enum variant cannot be default and unset"
+                );
+
+                return if attr.default {
+                    assert!(!has_default, "Default variant already defined");
+                    has_default = true;
+
+                    quote! {
+                        _  => {
+                            tag.ty.skip(r)?;
+                            Self::#var_ident
+                        }
                     }
-                    .into();
                 } else {
-                    default_handling = quote! {
-                        _ => Self::#var_ident
-                    }
-                    .into();
-                }
-
-                false
-            } else {
-                true
+                    assert!(!has_unset, "Unset variant already defined");
+                    has_unset = true;
+                    quote!( tdf::types::tagged_union::TAGGED_UNSET_KEY => Self::#var_ident )
+                };
             }
-        })
-        .map(|(variant, attr)| {
-            let var_ident = &variant.ident;
-            let discriminant = attr
-                .key
-                .expect("Non default/unset enum variants must have a discriminant key");
-            let value_tag = attr.tag;
 
-            // TODO: Ensure no duplicates
+            assert!(
+                !is_unit,
+                "Enum variants with fields cannot be used as the default or unset variant"
+            );
 
-            // TODO: Validate value tag matches
+            let discriminant = attr.key.expect("Missing discriminant key");
+            let _value_tag = attr.tag.expect("Missing value tag");
+            // TODO: Ensure no duplicates & validate value tag matches
 
             match &variant.fields {
-                syn::Fields::Named(fields) => {
-                    assert!(
-                        !attr.unset,
-                        "Enum variants with fields cannot be used as the unset variant"
-                    );
-
-                    // Named variants must be group type
-
-                    value_tag.expect("Named tagged enums are groups and need a value tag");
-
-                    let field_idents = fields.named.iter().filter_map(|field| field.ident.as_ref());
-                    let field_impls = fields.named.iter().map(tag_field_deserialize);
+                // Variants with named fields are handled as groups
+                Fields::Named(fields) => {
+                    let (idents, impls): (Vec<_>, Vec<_>) = fields
+                        .named
+                        .iter()
+                        .map(|field| {
+                            let ident = field.ident.as_ref().unwrap();
+                            let value = tag_field_deserialize(field);
+                            (ident, value)
+                        })
+                        .unzip();
 
                     quote! {
                         #discriminant => {
-
                             tdf::GroupSlice::deserialize_prefix_two(r)?;
-
-                            #(#field_impls)*
-
+                            #(#impls)*
                             tdf::GroupSlice::deserialize_content_skip(r)?;
 
                             Self::#var_ident {
-                                #(#field_idents)*
+                                #(#idents)*
                             }
-                        },
+                        }
                     }
                 }
-                // Unnamed may not be group type, use type from value
-                syn::Fields::Unnamed(fields) => {
-                    assert!(
-                        !attr.unset,
-                        "Enum variants with fields cannot be used as the unset variant"
-                    );
-
+                // Variants with unnamed fields are treated as the type of the first field (Only one field is allowed)
+                Fields::Unnamed(fields) => {
                     let fields = &fields.unnamed;
+                    let field = fields.first().expect("Unnamed tagged enum missing field");
 
                     assert!(
                         fields.len() == 1,
                         "Tagged union cannot have more than one unnamed field"
                     );
 
-                    let field = fields.first().unwrap();
                     let field_ty = &field.ty;
 
                     quote! {
                         #discriminant => {
                             let value = <#field_ty as tdf::TdfDeserialize<'_>>::deserialize(r)?;
                             Self::#var_ident(value)
-                        },
+                        }
                     }
                 }
-                syn::Fields::Unit => {
-                    assert!(
-                        attr.unset || attr.default,
-                        "Only unset or default enum variants can have no content"
-                    );
 
-                    quote! {
-                        #discriminant => {
-                            tag.ty.skip(r)?;
-                            Self::#var_ident
-                        },
-                    }
-                }
+                Fields::Unit => unreachable!("Unit types should already be handled above"),
             }
         })
         .collect();
 
-    let unset_handling = unset_handling.unwrap_or_else(
-        || quote!(return Err(tdf::DecodeError::Other("Missing unset enum variant"));),
-    );
+    if !has_unset {
+        // If an unset variant is not specified its handling is replaced with a runtime error
+        impls.push(quote!(
+            tdf::types::tagged_union::TAGGED_UNSET_KEY => return Err(tdf::DecodeError::Other("Missing unset enum variant"))
+        ));
+    }
 
-    let default_handling = default_handling.unwrap_or_else(
-        || quote!(_ => return Err(tdf::DecodeError::Other("Missing default enum variant"))),
-    );
+    if !has_default {
+        // If a default variant is not specified its handling is replaced with a runtime error
+        impls.push(quote!(
+            _ => return Err(tdf::DecodeError::Other("Missing default enum variant"))
+        ));
+    }
 
     let ident = &input.ident;
 
     quote! {
-        impl #generics TdfDeserialize<#lifetime> for #ident #generics #where_clause {
-            fn deserialize(r: &mut TdfDeserializer<#lifetime>) -> DecodeResult<Self> {
+        impl #generics tdf::TdfDeserialize<#lifetime> for #ident #generics #where_clause {
+            fn deserialize(r: &mut tdf::TdfDeserializer<#lifetime>) -> tdf::DecodeResult<Self> {
                 let discriminant = <u8 as tdf::TdfDeserialize<'_>>::deserialize(r)?;
-
-                if discriminant == tdf::types::tagged_union::TAGGED_UNSET_KEY {
-                    #unset_handling
-                }
-
                 let tag = tdf::Tagged::deserialize_owned(r)?;
 
                 Ok(match discriminant {
-                    #(#field_impls)*
-                    #default_handling
+                    #impls
                 })
             }
         }
