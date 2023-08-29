@@ -9,9 +9,43 @@ use syn::{
 #[derive(Debug, FromAttributes)]
 #[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
 struct TdfFieldAttr {
-    pub tag: Expr,
+    tag: Expr,
     #[darling(default)]
-    pub skip: bool,
+    skip: bool,
+}
+
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
+struct TdfStructAttr {
+    #[darling(default)]
+    group: bool,
+    #[darling(default)]
+    prefix_two: bool,
+}
+
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
+struct TdfEnumVariantAttr {
+    #[darling(default)]
+    default: bool,
+}
+
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
+struct TdfTaggedEnumVariantAttr {
+    pub key: Option<Expr>,
+
+    #[darling(default)]
+    pub tag: Option<Expr>,
+
+    #[darling(default)]
+    pub prefix_two: bool,
+
+    #[darling(default)]
+    pub default: bool,
+
+    #[darling(default)]
+    pub unset: bool,
 }
 
 #[proc_macro_derive(TdfSerialize, attributes(tdf))]
@@ -21,7 +55,7 @@ pub fn derive_tdf_serialize(input: TokenStream) -> TokenStream {
     match &input.data {
         syn::Data::Struct(data) => impl_serialize_struct(&input, data),
         syn::Data::Enum(data) => impl_serialize_enum(&input, data),
-        syn::Data::Union(_) => todo!(),
+        syn::Data::Union(_) => panic!("TdfSerialize cannot be implemented on union types"),
     }
 }
 
@@ -32,17 +66,18 @@ pub fn derive_tdf_typed(input: TokenStream) -> TokenStream {
     match &input.data {
         syn::Data::Struct(data) => impl_type_struct(&input, data),
         syn::Data::Enum(data) => impl_type_enum(&input, data),
-        syn::Data::Union(_) => todo!(),
+        syn::Data::Union(_) => panic!("TdfTyped cannot be implemented on union types"),
     }
 }
 
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
-struct TdfStructAttr {
-    #[darling(default)]
-    pub group: bool,
-    #[darling(default)]
-    pub prefix_two: bool,
+#[proc_macro_derive(TdfDeserialize, attributes(tdf))]
+pub fn derive_tdf_deserialize(input: TokenStream) -> TokenStream {
+    let input: DeriveInput = parse_macro_input!(input);
+    match &input.data {
+        syn::Data::Struct(data) => impl_deserialize_struct(&input, data),
+        syn::Data::Enum(data) => impl_deserialize_enum(&input, data),
+        syn::Data::Union(_) => panic!("TdfDeserialize cannot be implemented on union types"),
+    }
 }
 
 fn impl_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
@@ -313,16 +348,6 @@ fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
     .into()
 }
 
-#[proc_macro_derive(TdfDeserialize, attributes(tdf))]
-pub fn derive_tdf_deserialize(input: TokenStream) -> TokenStream {
-    let input: DeriveInput = parse_macro_input!(input);
-    match &input.data {
-        syn::Data::Struct(data) => impl_deserialize_struct(&input, data),
-        syn::Data::Enum(data) => impl_deserialize_enum(&input, data),
-        syn::Data::Union(_) => todo!(),
-    }
-}
-
 fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
     let attr =
         TdfStructAttr::from_attributes(&input.attrs).expect("Failed to parse tdf struct attrs");
@@ -406,13 +431,6 @@ fn impl_deserialize_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     }
 }
 
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
-struct TdfEnumVariantAttr {
-    #[darling(default)]
-    pub default: bool,
-}
-
 fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     dbg!(&input.attrs);
     let repr = get_repr_attribute(&input.attrs)
@@ -473,24 +491,6 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
         }
     }
     .into()
-}
-
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
-struct TdfTaggedEnumVariantAttr {
-    pub key: Option<Expr>,
-
-    #[darling(default)]
-    pub tag: Option<Expr>,
-
-    #[darling(default)]
-    pub prefix_two: bool,
-
-    #[darling(default)]
-    pub default: bool,
-
-    #[darling(default)]
-    pub unset: bool,
 }
 
 fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
