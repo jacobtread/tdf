@@ -52,7 +52,6 @@ where
 }
 
 #[derive(TdfSerialize, TdfDeserialize)]
-#[tdf(repr = u8)]
 #[repr(u8)]
 pub enum TestEnum {
     Value = 0x1,
@@ -60,8 +59,7 @@ pub enum TestEnum {
 }
 
 #[derive(TdfSerialize, TdfDeserialize)]
-#[tdf(repr = u8)]
-#[repr(u8)]
+#[repr(u16)]
 pub enum TestEnumFallback {
     Value = 0x1,
     Test = 0x2,

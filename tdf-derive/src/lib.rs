@@ -1,10 +1,11 @@
 use std::f32::consts::E;
 
 use darling::{usage::GenericsExt, FromAttributes, FromDeriveInput};
-use proc_macro::TokenStream;
+use proc_macro::{Span, TokenStream, TokenTree};
 use quote::quote;
 use syn::{
-    parse_macro_input, Attribute, DataEnum, DataStruct, DeriveInput, Expr, Generics, Ident, Type,
+    parse_macro_input, Attribute, DataEnum, DataStruct, DeriveInput, Expr, Generics, Ident,
+    Lifetime, LifetimeParam, Type,
 };
 
 #[derive(Debug, FromAttributes)]
@@ -17,27 +18,23 @@ struct TdfFieldAttr {
 
 #[proc_macro_derive(TdfSerialize, attributes(tdf))]
 pub fn derive_tdf_serialize(input: TokenStream) -> TokenStream {
-    let DeriveInput {
-        ident,
-        generics,
-        data,
-        attrs,
-        ..
-    } = parse_macro_input!(input);
+    let input: DeriveInput = parse_macro_input!(input);
 
-    match data {
-        syn::Data::Struct(data) => derive_tdf_serialize_struct(ident, generics, data),
-        syn::Data::Enum(data) => derive_tdf_serialize_enum(ident, attrs, data),
+    match &input.data {
+        syn::Data::Struct(data) => derive_tdf_serialize_struct(&input, data),
+        syn::Data::Enum(data) => derive_tdf_serialize_repr_enum(&input, data),
         syn::Data::Union(_) => todo!(),
     }
 }
 
-fn derive_tdf_serialize_struct(ident: Ident, generics: Generics, data: DataStruct) -> TokenStream {
+fn derive_tdf_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
+    let ident = &input.ident;
+    let generics = &input.generics;
     let where_clause = generics.where_clause.as_ref();
 
     let field_impls = data
         .fields
-        .into_iter()
+        .iter()
         .map(|field| {
             let attr: TdfFieldAttr = TdfFieldAttr::from_attributes(&field.attrs)
                 .expect("Failed to parse tdf field attrs");
@@ -46,8 +43,8 @@ fn derive_tdf_serialize_struct(ident: Ident, generics: Generics, data: DataStruc
         })
         .filter(|(_, attr)| !attr.skip)
         .map(|(field, attr)| {
-            let field_ident: Option<Ident> = field.ident;
-            let field_ty = field.ty;
+            let field_ident: Option<&Ident> = field.ident.as_ref();
+            let field_ty = &field.ty;
             let tag = attr.tag;
 
             // TODO: Validate tags
@@ -68,9 +65,21 @@ fn derive_tdf_serialize_struct(ident: Ident, generics: Generics, data: DataStruc
     .into()
 }
 
-fn derive_tdf_serialize_enum(ident: Ident, attrs: Vec<Attribute>, data: DataEnum) -> TokenStream {
-    let enum_attr = TdfEnumAttr::from_attributes(&attrs).unwrap();
-    let repr = enum_attr.repr;
+fn get_repr_attribute(attrs: &[Attribute]) -> Option<Ident> {
+    attrs
+        .iter()
+        .filter_map(|attr| attr.meta.require_list().ok())
+        .find(|value| value.path.is_ident("repr"))
+        .map(|attr| {
+            let value: Ident = attr.parse_args().expect("Failed to parse repr type");
+            value
+        })
+}
+
+fn derive_tdf_serialize_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
+    let ident = &input.ident;
+    let repr = get_repr_attribute(&input.attrs)
+        .expect("Non-tagged enums require #[repr({ty})] to be specified");
 
     quote! {
         impl TdfSerializeOwned for #ident {
@@ -86,53 +95,37 @@ fn derive_tdf_serialize_enum(ident: Ident, attrs: Vec<Attribute>, data: DataEnum
     .into()
 }
 
-#[derive(FromDeriveInput)]
-#[darling(attributes(repr), forward_attrs(allow, doc, cfg))]
-struct DeserializeOpts {
-    pub repr: Option<Ident>,
-}
-
 #[proc_macro_derive(TdfDeserialize, attributes(tdf))]
 pub fn derive_tdf_deserialize(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input);
-    let opts = DeserializeOpts::from_derive_input(&input).unwrap();
-    let DeriveInput {
-        ident,
-        generics,
-        data,
-        attrs,
-        ..
-    } = input;
-
-    match data {
-        syn::Data::Struct(data) => derive_tdf_deserialize_struct(ident, generics, data),
-        syn::Data::Enum(data) => derive_tdf_deserialize_enum(ident, attrs, data),
+    let input: DeriveInput = parse_macro_input!(input);
+    match &input.data {
+        syn::Data::Struct(data) => derive_tdf_deserialize_struct(&input, data),
+        syn::Data::Enum(data) => derive_tdf_deserialize_enum(&input, data),
         syn::Data::Union(_) => todo!(),
     }
 }
 
-fn derive_tdf_deserialize_struct(
-    ident: Ident,
-    generics: Generics,
-    data: DataStruct,
-) -> TokenStream {
-    let mut lifetimes = generics.lifetimes();
+fn derive_tdf_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
+    let ident = &input.ident;
+    let generics = &input.generics;
+
+    let mut lifetimes = input.generics.lifetimes();
     let lifetime = lifetimes.next();
 
     if lifetimes.next().is_some() {
         panic!(
             "{} has more than one lifetime, cannot derive TdfDeserialize",
-            ident
+            input.ident
         );
     }
 
     let where_clause = generics.where_clause.as_ref();
 
-    let mut field_idents: Vec<Ident> = Vec::new();
+    let field_idents = data.fields.iter().filter_map(|field| field.ident.as_ref());
 
     let field_impls = data
         .fields
-        .into_iter()
+        .iter()
         .map(|field| {
             let attr: TdfFieldAttr = TdfFieldAttr::from_attributes(&field.attrs)
                 .expect("Failed to parse tdf field attrs");
@@ -141,73 +134,117 @@ fn derive_tdf_deserialize_struct(
         })
         .filter(|(_, attr)| !attr.skip)
         .map(|(field, attr)| {
-            let field_ident = field.ident.unwrap();
-            let field_ty = field.ty;
+            let field_ident = field.ident.as_ref().unwrap();
+            let field_ty = &field.ty;
             let tag = attr.tag;
 
             // TODO: Validate tags
-            field_idents.push(field_ident.clone());
 
             quote! {
                 let #field_ident = r.tag::<#field_ty>(#tag)?;
             }
         });
 
-    if let Some(lifetime) = lifetime {
-        quote! {
-            impl #generics TdfDeserialize<#lifetime> for #ident #generics #where_clause {
-                fn deserialize(r: &mut TdfDeserializer<#lifetime>) -> DecodeResult<Self> {
-                    #(#field_impls)*
+    let default_lifetime = LifetimeParam::new(Lifetime::new("'_", Span::call_site().into()));
 
-                    Ok(Self {
-                        #(#field_idents)*
-                    })
-                }
-            }
+    let lifetime = lifetime.unwrap_or(&default_lifetime);
 
-        }
-        .into()
-    } else {
-        quote! {
-            impl #generics TdfDeserialize<'_> for #ident #generics #where_clause {
-                fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
-                    #(#field_impls)*
+    quote! {
+        impl #generics TdfDeserialize<#lifetime> for #ident #generics #where_clause {
+            fn deserialize(r: &mut TdfDeserializer<#lifetime>) -> DecodeResult<Self> {
+                #(#field_impls)*
 
-                    Ok(Self {
-                        #(#field_idents)*
-                    })
-                }
+                Ok(Self {
+                    #(#field_idents)*
+                })
             }
         }
-        .into()
+
     }
+    .into()
 }
 
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
-struct TdfEnumAttr {
-    #[darling(default)]
-    pub tagged: bool,
-}
-
-fn derive_tdf_deserialize_enum(
-    ident: Ident,
-    attrs: Vec<Attribute>,
-    data: &DataEnum,
-) -> TokenStream {
-    let attr: TdfEnumAttr =
-        TdfEnumAttr::from_attributes(&attrs).expect("Failed to parse tdf field attrs");
-
+fn derive_tdf_deserialize_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     let is_tagged = data
         .variants
         .iter()
         .any(|variant| !variant.fields.is_empty());
 
-    if attr.tagged {
-        derive_tdf_deserialize_tagged_enum(ident, attr, data)
+    if is_tagged {
+        derive_tdf_deserialize_tagged_enum(input, data)
     } else {
-        derive_tdf_deserialize_repr_enum(ident, attr, data)
+        derive_tdf_deserialize_repr_enum(input, data)
     }
+}
+
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
+struct TdfEnumVariantAttr {
+    #[darling(default)]
+    pub default: bool,
+}
+
+fn derive_tdf_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
+    dbg!(&input.attrs);
+    let repr = get_repr_attribute(&input.attrs)
+        .expect("Non-tagged enums require #[repr({ty})] to be specified");
+
+    let mut default = None;
+
+    let variant_cases: Vec<_> = data
+        .variants
+        .iter()
+        .map(|variant| {
+            let attr = TdfEnumVariantAttr::from_attributes(&variant.attrs)
+                .expect("Failed to parse tdf enum variant attrs");
+            (variant, attr)
+        })
+        .filter(|(variant, attr)| {
+            if !attr.default {
+                return true;
+            }
+
+            if default.is_some() {
+                panic!("Cannot have more than one default variant");
+            }
+
+            let ident = &variant.ident;
+
+            default = Some(quote!(_ => Self::#ident));
+
+            false
+        })
+        .map(|(variant, _attr)| {
+            let var_ident = &variant.ident;
+            let (_, discriminant) = variant
+                .discriminant
+                .as_ref()
+                .expect("Repr enum variants must include a descriminant for each value");
+
+            quote! {
+                #discriminant => Self::#var_ident,
+            }
+        })
+        .collect();
+
+    let ident = &input.ident;
+    let default = default.unwrap_or_else(
+        || quote!(_ => return Err(tdf::DecodeError::Other("Missing fallback enum variant"))),
+    );
+
+    quote! {
+        impl TdfDeserialize<'_> for #ident {
+            fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+                let value = <#repr>::deserialize(r)?;
+                Ok(match value {
+                    #(#variant_cases)*
+                    #default
+                })
+            }
+        }
+
+    }
+    .into()
 }
 
 #[derive(Debug, FromAttributes)]
@@ -225,17 +262,13 @@ struct TdfTaggedEnumVariantAttr {
     pub unset: bool,
 }
 
-fn derive_tdf_deserialize_tagged_enum(
-    ident: Ident,
-    attr: TdfEnumAttr,
-    data: DataEnum,
-) -> TokenStream {
+fn derive_tdf_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     let mut unset_handling = None;
     let mut default_handling = None;
 
     let field_impls: Vec<_> = data
         .variants
-        .into_iter()
+        .iter()
         .map(|variant| {
             let attr: TdfTaggedEnumVariantAttr =
                 TdfTaggedEnumVariantAttr::from_attributes(&variant.attrs)
@@ -269,7 +302,7 @@ fn derive_tdf_deserialize_tagged_enum(
             }
         })
         .map(|(variant, attr)| {
-            let var_ident = variant.ident;
+            let var_ident = &variant.ident;
             let discriminant = attr
                 .key
                 .expect("Non default/unset enum variants must have a discriminant key");
@@ -279,7 +312,7 @@ fn derive_tdf_deserialize_tagged_enum(
 
             // TODO: Validate value tag matches
 
-            match variant.fields {
+            match &variant.fields {
                 syn::Fields::Named(fields) => {
                     // Named variants must be group type
 
@@ -342,17 +375,15 @@ fn derive_tdf_deserialize_tagged_enum(
         })
         .collect();
 
-    let unset_handling = unset_handling.unwrap_or_else(|| {
-        quote! {
-            return Err(tdf::DecodeError::Other("Missing unset enum variant"));
-        }
-    });
+    let unset_handling = unset_handling.unwrap_or_else(
+        || quote!(return Err(tdf::DecodeError::Other("Missing unset enum variant"));),
+    );
 
-    let default_handling = default_handling.unwrap_or_else(|| {
-        quote! {
-            _ => return Err(tdf::DecodeError::Other("Missing default enum variant"))
-        }
-    });
+    let default_handling = default_handling.unwrap_or_else(
+        || quote!(_ => return Err(tdf::DecodeError::Other("Missing default enum variant"))),
+    );
+
+    let ident = &input.ident;
 
     quote! {
         impl tdf::TdfDeserialize<'_> for #ident {
@@ -373,73 +404,4 @@ fn derive_tdf_deserialize_tagged_enum(
         }
     }
     .into()
-}
-
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
-struct TdfEnumVariantAttr {
-    #[darling(default)]
-    pub default: bool,
-}
-
-fn derive_tdf_deserialize_repr_enum(
-    ident: Ident,
-    attr: TdfEnumAttr,
-    data: DataEnum,
-) -> TokenStream {
-    let repr = attr
-        .repr
-        .expect("Non tagged enums must specify the repr type (i.e. u8, u16, u32)");
-
-    let default: Option<Ident> = data
-        .variants
-        .iter()
-        .find(|value| {
-            let attr: TdfEnumVariantAttr = TdfEnumVariantAttr::from_attributes(&value.attrs)
-                .expect("Failed to parse tdf enum variant attrs");
-            attr.default
-        })
-        .map(|value| value.ident.clone());
-
-    let field_impls: Vec<_> = data
-        .variants
-        .into_iter()
-        .map(|variant| {
-            let var_ident = variant.ident;
-            let (_, discriminant) = variant.discriminant.unwrap();
-
-            quote! {
-                #discriminant => Self::#var_ident,
-            }
-        })
-        .collect();
-
-    if let Some(default) = default {
-        quote! {
-            impl TdfDeserialize<'_> for #ident {
-                fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
-                    let value = <#repr>::deserialize(r)?;
-                    Ok(match value {
-                        #(#field_impls)*
-                        _ => Self::#default
-                    })
-                }
-            }
-
-        }
-        .into()
-    } else {
-        quote! {
-            impl TdfDeserialize<'_> for #ident {
-                fn deserialize(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
-                    let value = <#repr>::deserialize(r)?;
-                    Ok(match value {
-                        #(#field_impls)*
-                        _ => return Err(tdf::DecodeError::Other("Missing fallback enum variant"))
-                    })
-                }
-            }
-        }
-        .into()
-    }
 }
