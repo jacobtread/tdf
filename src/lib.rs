@@ -73,7 +73,7 @@ pub enum TestEnumFallback {
 #[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(tagged)]
 pub enum TestTaggedEnum {
-    #[tdf(key = 0x1, tag = b"TEST")]
+    #[tdf(key = 0x1, tag = b"TEST", prefix_two)]
     Value {
         #[tdf(tag = b"VALU")]
         key: String,

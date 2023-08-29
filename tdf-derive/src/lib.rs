@@ -186,10 +186,116 @@ fn impl_type_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
 fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
     let ident = &input.ident;
 
+    let field_impls: Vec<_> = data
+        .variants
+        .iter()
+        .map(|variant| {
+            let attr: TdfTaggedEnumVariantAttr =
+                TdfTaggedEnumVariantAttr::from_attributes(&variant.attrs)
+                    .expect("Failed to parse tdf field attrs");
+
+            (variant, attr)
+        })
+        .map(|(variant, attr)| {
+            let var_ident = &variant.ident;
+            let value_tag = attr.tag;
+
+            // TODO: Ensure no duplicates
+
+            // TODO: Validate value tag matches
+
+            if attr.unset {
+                assert!(matches!(&variant.fields, syn::Fields::Unit));
+            }
+
+            match &variant.fields {
+                syn::Fields::Named(fields) => {
+                    // Named variants must be group type
+                    let discriminant = attr
+                        .key
+                        .expect("Non default/unset enum variants must have a discriminant key");
+                    let value_tag =
+                        value_tag.expect("Named tagged enums are groups and need a value tag");
+
+                    let field_idents = fields.named.iter().filter_map(|field| field.ident.as_ref());
+                    let field_impls = fields.named.iter().map(|field| {
+                        let attr: TdfFieldAttr = TdfFieldAttr::from_attributes(&field.attrs)
+                            .expect("Failed to parse tdf field attrs");
+
+                        let field_ident = field.ident.as_ref().unwrap();
+                        let field_ty = &field.ty;
+                        let tag = attr.tag;
+
+                        quote! {
+                            Tagged::serialize_raw(w, #tag, <#field_ty>::TYPE);
+                            <#field_ty as tdf::TdfSerialize>::serialize(#field_ident, w);
+                        }
+                    });
+
+                    let mut leading = None;
+
+                    if attr.prefix_two {
+                        leading = Some(quote!( w.write_byte(2); ))
+                    }
+
+                    quote! {
+                        Self::#var_ident { #(#field_idents),* } => {
+
+                            w.write_byte(#discriminant);
+                            Tagged::serialize_raw(w, #value_tag, TdfType::Group);
+
+                            #leading
+
+                            #(#field_impls)*
+
+                            w.tag_group_end();
+                        }
+                    }
+                }
+                // Unnamed may not be group type, use type from value
+                syn::Fields::Unnamed(fields) => {
+                    let discriminant = attr
+                        .key
+                        .expect("Non default/unset enum variants must have a discriminant key");
+                    let value_tag =
+                        value_tag.expect("Unnamed tagged enum variants need a value tag");
+
+                    let fields = &fields.unnamed;
+                    if fields.len() > 1 {
+                        panic!("Tagged union cannot have more than one unnamed field");
+                    }
+                    let field = fields.first().unwrap();
+                    let field_ty = &field.ty;
+
+                    quote! {
+                        Self::#var_ident(value) => {
+                            w.write_byte(#discriminant);
+                            Tagged::serialize_raw(w, #value_tag, <#field_ty as TdfTyped>::TYPE);
+                            <#field_ty as tdf::TdfSerialize>::serialize(value, w);
+                        }
+                    }
+                }
+                syn::Fields::Unit => {
+                    if !attr.unset && !attr.default {
+                        panic!("Only unset or default enum variants can have no content")
+                    }
+
+                    quote! {
+                        Self::#var_ident => {
+                            w.write_byte(tdf::types::tagged_union::TAGGED_UNSET_KEY);
+                        }
+                    }
+                }
+            }
+        })
+        .collect();
+
     quote! {
         impl tdf::TdfSerialize for #ident {
             fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-
+                match self {
+                    #(#field_impls),*
+                }
             }
         }
     }
@@ -378,6 +484,9 @@ struct TdfTaggedEnumVariantAttr {
     pub tag: Option<Expr>,
 
     #[darling(default)]
+    pub prefix_two: bool,
+
+    #[darling(default)]
     pub default: bool,
 
     #[darling(default)]
@@ -486,6 +595,10 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                     }
                 }
                 syn::Fields::Unit => {
+                    if !attr.unset && !attr.default {
+                        panic!("Only unset or default enum variants can have no content")
+                    }
+
                     quote! {
                         #discriminant => {
                             tag.ty.skip(r)?;
