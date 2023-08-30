@@ -572,8 +572,10 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                     assert!(!has_default, "Default variant already defined");
                     has_default = true;
 
+                    // TODO: Ensure no duplicates & validate value tag matches
                     quote! {
                         _  => {
+                            let tag = tdf::Tagged::deserialize_owned(r)?;
                             tag.ty.skip(r)?;
                             Self::#var_ident
                         }
@@ -592,7 +594,6 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
 
             let discriminant = attr.key.expect("Missing discriminant key");
             let _value_tag = attr.tag.expect("Missing value tag");
-            // TODO: Ensure no duplicates & validate value tag matches
 
             match &variant.fields {
                 // Variants with named fields are handled as groups
@@ -607,8 +608,11 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                         })
                         .unzip();
 
+                    // TODO: Ensure no duplicates & validate value tag matches
                     quote! {
                         #discriminant => {
+                            let tag = tdf::Tagged::deserialize_owned(r)?;
+
                             tdf::GroupSlice::deserialize_prefix_two(r)?;
                             #(#impls)*
                             tdf::GroupSlice::deserialize_content_skip(r)?;
@@ -631,8 +635,11 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
 
                     let field_ty = &field.ty;
 
+                    // TODO: Ensure no duplicates & validate value tag matches
                     quote! {
                         #discriminant => {
+                            let tag = tdf::Tagged::deserialize_owned(r)?;
+
                             let value = <#field_ty as tdf::TdfDeserialize<'_>>::deserialize(r)?;
                             Self::#var_ident(value)
                         }
@@ -664,7 +671,6 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
         impl #generics tdf::TdfDeserialize<#lifetime> for #ident #generics #where_clause {
             fn deserialize(r: &mut tdf::TdfDeserializer<#lifetime>) -> tdf::DecodeResult<Self> {
                 let discriminant = <u8 as tdf::TdfDeserialize<#lifetime>>::deserialize(r)?;
-                let tag = tdf::Tagged::deserialize_owned(r)?;
 
                 Ok(match discriminant {
                     #impls
