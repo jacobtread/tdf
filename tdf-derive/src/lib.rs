@@ -379,9 +379,11 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
             }
         })
         .collect();
+    let generics = &input.generics;
+    let where_clause = generics.where_clause.as_ref();
 
     quote! {
-        impl tdf::TdfSerialize for #ident {
+        impl #generics tdf::TdfSerialize for #ident #generics #where_clause {
             fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
                 match self {
                     #(#field_impls),*
@@ -612,7 +614,7 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                             tdf::GroupSlice::deserialize_content_skip(r)?;
 
                             Self::#var_ident {
-                                #(#idents)*
+                                #(#idents),*
                             }
                         }
                     }
@@ -661,7 +663,7 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
     quote! {
         impl #generics tdf::TdfDeserialize<#lifetime> for #ident #generics #where_clause {
             fn deserialize(r: &mut tdf::TdfDeserializer<#lifetime>) -> tdf::DecodeResult<Self> {
-                let discriminant = <u8 as tdf::TdfDeserialize<'_>>::deserialize(r)?;
+                let discriminant = <u8 as tdf::TdfDeserialize<#lifetime>>::deserialize(r)?;
                 let tag = tdf::Tagged::deserialize_owned(r)?;
 
                 Ok(match discriminant {
