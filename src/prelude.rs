@@ -6,3 +6,6 @@ pub use crate::types::{
     TdfMap, TdfSerialize, TdfSerializeOwned, TdfTyped, VarIntList, U12,
 };
 pub use crate::{reader::TdfDeserializer, writer::TdfSerializer};
+
+#[cfg(feature = "derive")]
+pub use tdf_derive::{TdfDeserialize, TdfSerialize, TdfTyped};
