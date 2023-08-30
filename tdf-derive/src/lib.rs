@@ -1,6 +1,7 @@
-use darling::FromAttributes;
+use darling::{FromAttributes, FromMeta};
 use proc_macro::{Span, TokenStream};
-use quote::quote;
+use proc_macro2::{Delimiter, Group, Punct};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse_macro_input, punctuated::Punctuated, token::Comma, Attribute, DataEnum, DataStruct,
     DeriveInput, Expr, Field, Fields, Generics, Ident, Lifetime, LifetimeParam,
@@ -9,7 +10,7 @@ use syn::{
 #[derive(Debug, FromAttributes)]
 #[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
 struct TdfFieldAttrs {
-    tag: Option<Expr>,
+    tag: Option<DataTag>,
     #[darling(default)]
     skip: bool,
 }
@@ -36,7 +37,7 @@ struct TdfTaggedEnumVariantAttr {
     pub key: Option<Expr>,
 
     #[darling(default)]
-    pub tag: Option<Expr>,
+    pub tag: Option<DataTag>,
 
     #[darling(default)]
     pub prefix_two: bool,
@@ -167,16 +168,39 @@ fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
     .into()
 }
 
+#[derive(Debug)]
+struct DataTag([u8; 4]);
+
+impl FromMeta for DataTag {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        let mut out = [0u8; 4];
+
+        let input = value.as_bytes();
+        // Only copy the max of 4 bytes
+        let len = input.len().min(4);
+        out[0..len].copy_from_slice(input);
+
+        Ok(Self(out))
+    }
+}
+
+impl ToTokens for DataTag {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        tokens.append(Punct::new('&', proc_macro2::Spacing::Joint));
+        let [a, b, c, d] = &self.0;
+        let inner_stream = quote!(#a, #b, #c, #d);
+        tokens.append(Group::new(Delimiter::Bracket, inner_stream));
+    }
+}
+
 fn tag_field_serialize(
     field: &Field,
-    tag: Option<Expr>,
+    tag: Option<DataTag>,
     is_struct: bool,
 ) -> proc_macro2::TokenStream {
     let tag = tag.expect("Fields that arent skipped must specify a tag");
     let ident = &field.ident;
     let ty = &field.ty;
-
-    // TODO: Validate tag
 
     if is_struct {
         quote!( w.tag_ref::<#ty>(#tag, &self.#ident); )

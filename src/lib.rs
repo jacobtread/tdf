@@ -31,14 +31,14 @@ use crate as tdf;
 #[derive(TdfSerialize, TdfTyped)]
 #[tdf(group)]
 pub struct Example {
-    #[tdf(tag = b"ABCD")]
+    #[tdf(tag = "ABCD")]
     pub example: u32,
 }
 
 #[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(group)]
 pub struct ExampleWithLifetime<'a> {
-    #[tdf(tag = b"ABCD")]
+    #[tdf(tag = "ABCD")]
     pub example: &'a str,
 }
 
@@ -48,9 +48,9 @@ pub struct ExampleWithLifetimeGeneric<'a, T>
 where
     T: TdfSerialize + TdfTyped,
 {
-    #[tdf(tag = b"ABCD")]
+    #[tdf(tag = "ABCD")]
     pub example: &'a str,
-    #[tdf(tag = b"TEST")]
+    #[tdf(tag = "TEST")]
     pub alt: T,
 }
 
@@ -73,12 +73,12 @@ pub enum TestEnumFallback {
 #[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(tagged)]
 pub enum TestTaggedEnum {
-    #[tdf(key = 0x1, tag = b"TEST", prefix_two)]
+    #[tdf(key = 0x1, tag = "TEST", prefix_two)]
     Value {
-        #[tdf(tag = b"VALU", skip)]
+        #[tdf(tag = "VALU")]
         key: String,
     },
-    #[tdf(key = 0x2, tag = b"TEST")]
+    #[tdf(key = 0x2, tag = "TEST")]
     Value2(String),
     #[tdf(default)]
     Test,
