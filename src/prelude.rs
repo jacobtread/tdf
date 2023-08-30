@@ -1,3 +1,5 @@
+//! Prelude for commonly used types re-exported
+
 pub use crate::error::{DecodeError, DecodeResult};
 pub use crate::stringify::{StringifyError, TdfStringifier};
 pub use crate::tag::{RawTag, Tag, Tagged, TdfType};

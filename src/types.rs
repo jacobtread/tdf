@@ -231,6 +231,9 @@ pub trait TdfTyped {
 }
 
 pub mod var_int {
+    //! Variable-length integer related implementations and related
+    //! help functions
+
     use super::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
@@ -545,6 +548,9 @@ pub mod var_int {
 }
 
 pub mod string {
+    //! String and string type related implementations and helper
+    //! functions
+
     use super::Blob;
     use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
@@ -557,6 +563,7 @@ pub mod string {
 
     // str slice types
 
+    /// Special functions for writing an empty string value
     pub fn write_empty_str<S: TdfSerializer>(w: &mut S) {
         w.write_slice(&[1, 0]);
     }
@@ -623,6 +630,8 @@ pub mod string {
 }
 
 pub mod blob {
+    //! Blob and blob type related implementations and helper functions
+
     use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
@@ -644,17 +653,20 @@ pub mod blob {
     }
 
     impl Blob<'_> {
+        /// Serializes a blob value from its raw slice component
         pub fn serialize_raw<S: TdfSerializer>(w: &mut S, slice: &[u8]) {
             slice.len().serialize_owned(w);
             w.write_slice(slice);
         }
 
+        /// Deserializes a blob directly as a slice
         pub fn deserialize_raw<'de>(r: &mut TdfDeserializer<'de>) -> DecodeResult<&'de [u8]> {
             let length = usize::deserialize_owned(r)?;
             let bytes = r.read_bytes(length)?;
             Ok(bytes)
         }
 
+        /// Skips a blob type
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             let length: usize = usize::deserialize_owned(r)?;
             r.skip_length(length)
@@ -681,6 +693,8 @@ pub mod blob {
 }
 
 pub mod list {
+    //! List type related implementations and helper functions
+
     use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::{DecodeError, DecodeResult},
@@ -689,6 +703,7 @@ pub mod list {
         writer::TdfSerializer,
     };
 
+    /// Skips a list while deserializing
     pub fn skip_list(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let ty: TdfType = TdfType::deserialize_owned(r)?;
         let length: usize = usize::deserialize_owned(r)?;
@@ -698,6 +713,8 @@ pub mod list {
         Ok(())
     }
 
+    /// Serializes the header portion of a list, which contains the
+    /// type and length of the list
     pub fn serialize_list_header<S: TdfSerializer>(w: &mut S, ty: TdfType, length: usize) {
         ty.serialize_owned(w);
         length.serialize_owned(w);
@@ -760,6 +777,8 @@ pub mod list {
 }
 
 pub mod map {
+    //! Map type related implementations and helper functions
+
     use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use std::{
         borrow::Borrow,
@@ -790,11 +809,13 @@ pub mod map {
     }
 
     impl<K, V> TdfMap<K, V> {
+        /// Creates a new [TdfMap]
         #[inline]
         pub const fn new() -> TdfMap<K, V> {
             TdfMap { data: Vec::new() }
         }
 
+        /// Creates a new [TdfMap] with a specific initial capacity
         #[inline]
         pub fn with_capacity(cap: usize) -> TdfMap<K, V> {
             TdfMap {
@@ -814,6 +835,7 @@ pub mod map {
             TdfMap { data: elements }
         }
 
+        /// Inserts a key and value into the map
         #[inline]
         pub fn insert(&mut self, key: K, mut value: V) -> Option<V> {
             match self.lookup_index_for(&key) {
@@ -829,6 +851,7 @@ pub mod map {
             }
         }
 
+        /// Removes a key from the map
         #[inline]
         pub fn remove(&mut self, key: &K) -> Option<V> {
             match self.lookup_index_for(key) {
@@ -837,6 +860,7 @@ pub mod map {
             }
         }
 
+        /// Gets a reference to a specific value from the map using its key
         #[inline]
         pub fn get<Q>(&self, key: &Q) -> Option<&V>
         where
@@ -849,6 +873,7 @@ pub mod map {
             }
         }
 
+        /// Gets a mutable reference to a specific value from the map using its key
         #[inline]
         pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
         where
@@ -878,6 +903,7 @@ pub mod map {
             unsafe { &mut self.data.get_unchecked_mut(index).1 }
         }
 
+        /// Clears the underlying structure
         #[inline]
         pub fn clear(&mut self) {
             self.data.clear();
@@ -901,16 +927,19 @@ pub mod map {
             self.data.iter().map(|(_, v)| v)
         }
 
+        /// Returns the length of the map
         #[inline]
         pub fn len(&self) -> usize {
             self.data.len()
         }
 
+        /// Returns whether the map is empty
         #[inline]
         pub fn is_empty(&self) -> bool {
             self.len() == 0
         }
 
+        /// Returns a range of key value pairs in the map
         #[inline]
         pub fn range<R>(&self, range: R) -> &[(K, V)]
         where
@@ -920,6 +949,7 @@ pub mod map {
             &self.data[start..end]
         }
 
+        /// Removes a range of key value pairs in the map
         #[inline]
         pub fn remove_range<R>(&mut self, range: R)
         where
@@ -1019,6 +1049,7 @@ pub mod map {
             (start, end)
         }
 
+        /// Checks if the map contains a specific key
         #[inline]
         pub fn contains_key<Q>(&self, key: &Q) -> bool
         where
@@ -1079,6 +1110,8 @@ pub mod map {
         }
     }
 
+    /// Helper function for deserializing the header portion of the
+    /// map returning the map key value types and length
     pub fn deserialize_map_header(
         r: &mut TdfDeserializer,
     ) -> DecodeResult<(TdfType, TdfType, usize)> {
@@ -1088,6 +1121,8 @@ pub mod map {
         Ok((key_type, value_type, length))
     }
 
+    /// Helper function for serializing a map header from the
+    /// raw key type, value type and length
     pub fn serialize_map_header<S: TdfSerializer>(
         w: &mut S,
         key_type: TdfType,
@@ -1099,6 +1134,7 @@ pub mod map {
         length.serialize_owned(w);
     }
 
+    /// Skips a map type when deserializing
     pub fn skip_map(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let (key_ty, value_ty, length) = deserialize_map_header(r)?;
         for _ in 0..length {
@@ -1160,6 +1196,8 @@ pub mod map {
 }
 
 pub mod tagged_union {
+    //! Tagged union type related implementations and helper functions
+
     use super::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped};
     use crate::{
         error::{DecodeError, DecodeResult},
@@ -1172,7 +1210,14 @@ pub mod tagged_union {
     #[derive(Debug, PartialEq, Eq)]
     pub enum TaggedUnion<V> {
         /// Set variant of a union value
-        Set { key: u8, tag: Tag, value: V },
+        Set {
+            /// The descriminant for the enum type
+            key: u8,
+            /// The tag for the associated value
+            tag: Tag,
+            /// The associated value
+            value: V,
+        },
         /// Unset variant of a union value
         Unset,
     }
@@ -1214,6 +1259,7 @@ pub mod tagged_union {
         const TYPE: TdfType = TdfType::TaggedUnion;
     }
 
+    /// Skips the next tagged unoion while deserializing
     pub fn skip_tagged_union(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let ty = r.read_byte()?;
         if ty != TAGGED_UNSET_KEY {
@@ -1268,6 +1314,8 @@ pub mod tagged_union {
 }
 
 pub mod var_int_list {
+    //! Variable-length integer list type related implementations and helper functions
+
     use super::{TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
@@ -1292,6 +1340,7 @@ pub mod var_int_list {
             self.0
         }
 
+        /// Skips the next var int list when deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             let length: usize = usize::deserialize_owned(r)?;
             for _ in 0..length {
@@ -1340,6 +1389,8 @@ pub mod var_int_list {
 }
 
 pub mod object_type {
+    //! ObjectType type related implementations and helper functions
+
     use super::{
         var_int::skip_var_int, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfTyped,
     };
@@ -1364,6 +1415,7 @@ pub mod object_type {
             Self { component, ty }
         }
 
+        /// Skip sthe next ObjectType when deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             skip_var_int(r)?;
             skip_var_int(r)
@@ -1425,6 +1477,8 @@ pub mod object_type {
 }
 
 pub mod object_id {
+    //! ObjectId type related implementations and helper functions
+
     use super::{
         object_type::ObjectType, var_int::skip_var_int, TdfDeserializeOwned, TdfSerialize,
         TdfSerializeOwned, TdfTyped,
@@ -1457,6 +1511,7 @@ pub mod object_id {
             }
         }
 
+        /// Skips an ObjectId when deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             ObjectType::skip(r)?;
             skip_var_int(r)
@@ -1524,6 +1579,8 @@ pub mod object_id {
 }
 
 pub mod float {
+    //! float type related implementations and helper functions
+
     use super::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
@@ -1586,6 +1643,8 @@ pub mod float {
 }
 
 pub mod u12 {
+    //! U12 type related implementations and helper functions
+
     use super::{Blob, TdfDeserialize, TdfSerialize, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
@@ -1602,6 +1661,7 @@ pub mod u12 {
     }
 
     impl U12<'_> {
+        /// Skips a U12 value while deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             r.skip_length(8)?;
             Blob::skip(r)?;
@@ -1630,6 +1690,8 @@ pub mod u12 {
 }
 
 pub mod group {
+    //! Group type related implementations and helper functions
+
     use super::TdfDeserialize;
     use crate::{error::DecodeResult, reader::TdfDeserializer, tag::Tagged};
 
@@ -1672,6 +1734,8 @@ pub mod group {
             Ok(is_end)
         }
 
+        /// Deserializes all the items in the slice using the provided decoding
+        /// action function
         #[inline]
         pub fn deserialize_content<'de, A>(
             r: &mut TdfDeserializer<'de>,
@@ -1705,6 +1769,7 @@ pub mod group {
             Self::deserialize_content(r, Tagged::skip)
         }
 
+        /// Skips a Group type while deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             Self::deserialize_prefix_two(r)?;
             Self::deserialize_content_skip(r)?;

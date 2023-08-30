@@ -34,11 +34,14 @@ pub struct Tagged {
 }
 
 impl Tagged {
+    /// Skips an entire tagged value by reading the tag then using
+    /// the specific skip implementation for that type
     pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let tag = Self::deserialize_owned(r)?;
         tag.ty.skip(r)
     }
 
+    /// Serializes a tagged value from the raw tag and value type
     pub fn serialize_raw<S: TdfSerializer>(w: &mut S, tag: RawTag, value_type: TdfType) {
         let mut output: [u8; 4] = [0, 0, 0, value_type as u8];
         let length: usize = tag.len();
@@ -143,17 +146,29 @@ impl Display for Tag {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 pub enum TdfType {
+    /// Variable length integers
     VarInt = 0x0,
+    /// String values
     String = 0x1,
+    /// Blob of bytes
     Blob = 0x2,
+    /// Group of multiple tags
     Group = 0x3,
+    /// List of values
     List = 0x4,
+    /// Map of key value pairs
     Map = 0x5,
+    /// Tagged unions
     TaggedUnion = 0x6,
+    /// Variable length integer list
     VarIntList = 0x7,
+    /// Type of an object
     ObjectType = 0x8,
+    /// Type of an object with an ID
     ObjectId = 0x9,
+    /// Float values
     Float = 0xA,
+    /// U12 (Unknown naming at this stage)
     U12 = 0xC,
 }
 
@@ -181,6 +196,7 @@ impl TryFrom<u8> for TdfType {
 }
 
 impl TdfType {
+    /// Skips the underlying type for this type
     pub fn skip(&self, r: &mut TdfDeserializer) -> DecodeResult<()> {
         match self {
             TdfType::VarInt => skip_var_int(r),

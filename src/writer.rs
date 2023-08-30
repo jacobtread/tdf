@@ -233,36 +233,43 @@ pub trait TdfSerializer: Sized {
 
     // Primitive integer tagging
 
+    /// Tags a zero value
     fn tag_zero(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::VarInt);
         self.write_byte(0);
     }
 
+    /// Tags a boolean value
     #[inline(always)]
     fn tag_bool(&mut self, tag: RawTag, value: bool) {
         self.tag_owned(tag, value);
     }
 
+    /// Tags a u8 value
     #[inline(always)]
     fn tag_u8(&mut self, tag: RawTag, value: u8) {
         self.tag_owned(tag, value);
     }
 
+    /// Tags a u16 value
     #[inline(always)]
     fn tag_u16(&mut self, tag: RawTag, value: u16) {
         self.tag_owned(tag, value);
     }
 
+    /// Tags a u32 value
     #[inline(always)]
     fn tag_u32(&mut self, tag: RawTag, value: u32) {
         self.tag_owned(tag, value);
     }
 
+    /// Tags a u64 value
     #[inline(always)]
     fn tag_u64(&mut self, tag: RawTag, value: u64) {
         self.tag_owned(tag, value);
     }
 
+    /// Tags a usize value
     #[inline(always)]
     fn tag_usize(&mut self, tag: RawTag, value: usize) {
         self.tag_owned(tag, value);
@@ -270,11 +277,13 @@ pub trait TdfSerializer: Sized {
 
     // String tagging
 
+    /// Tags an empty string value
     fn tag_str_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::String);
         write_empty_str(self);
     }
 
+    /// Tags a string value
     #[inline(always)]
     fn tag_str(&mut self, tag: RawTag, value: &str) {
         self.tag_alt(tag, value);
@@ -282,11 +291,13 @@ pub trait TdfSerializer: Sized {
 
     // Blob tagging
 
+    /// Tags an empty blob
     fn tag_blob_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Blob);
         self.write_byte(0);
     }
 
+    /// Tags a blob value from a slice
     fn tag_blob(&mut self, tag: RawTag, blob: &[u8]) {
         Tagged::serialize_raw(self, tag, TdfType::Blob);
         Blob::serialize_raw(self, blob);
@@ -294,16 +305,20 @@ pub trait TdfSerializer: Sized {
 
     // Group tagging
 
+    /// Tags the start of a group
     #[inline]
     fn tag_group(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::Group);
     }
 
+    /// Tags the end of a group
     #[inline]
     fn tag_group_end(&mut self) {
         self.write_byte(0);
     }
 
+    /// Tags a group value running the `gr` function within
+    /// the context of the group closing the group after
     #[inline]
     fn group<F>(&mut self, tag: RawTag, gr: F)
     where
@@ -316,16 +331,19 @@ pub trait TdfSerializer: Sized {
 
     // List tagging
 
+    /// Tags the start of a list for manual list writing
     fn tag_list_start(&mut self, tag: RawTag, ty: TdfType, length: usize) {
         Tagged::serialize_raw(self, tag, TdfType::List);
         serialize_list_header(self, ty, length);
     }
 
+    /// Tags an empty list
     #[inline]
     fn tag_list_empty(&mut self, tag: RawTag, ty: TdfType) {
         self.tag_list_start(tag, ty, 0);
     }
 
+    /// Tags a list from a slice value
     #[inline]
     fn tag_list_slice<V>(&mut self, tag: RawTag, value: &[V])
     where
@@ -334,6 +352,7 @@ pub trait TdfSerializer: Sized {
         self.tag_alt(tag, value);
     }
 
+    /// Tags a list from a slice of references
     #[inline]
     fn tag_list_slice_ref<V>(&mut self, tag: RawTag, value: &[&V])
     where
@@ -343,6 +362,7 @@ pub trait TdfSerializer: Sized {
         value.iter().for_each(|value| value.serialize(self));
     }
 
+    /// Tags a list from an [ExactSizeIterator]
     #[inline]
     fn tag_list_iter<I, V>(&mut self, tag: RawTag, iter: I)
     where
@@ -377,11 +397,13 @@ pub trait TdfSerializer: Sized {
 
     // Var int list tagging
 
+    /// Tags an empty var int list
     fn tag_var_int_list_empty(&mut self, tag: RawTag) {
         Tagged::serialize_raw(self, tag, TdfType::VarIntList);
         self.write_byte(0);
     }
 
+    /// Tags a var int list from a slice of u64s
     fn tag_var_int_list(&mut self, tag: RawTag, values: &[u64]) {
         Tagged::serialize_raw(self, tag, TdfType::VarIntList);
         values.len().serialize_owned(self);
@@ -393,11 +415,13 @@ pub trait TdfSerializer: Sized {
 
     // Map tagging
 
+    /// Tags the start of a map
     fn tag_map_start(&mut self, tag: RawTag, key: TdfType, value: TdfType, length: usize) {
         Tagged::serialize_raw(self, tag, TdfType::Map);
         serialize_map_header(self, key, value, length);
     }
 
+    /// Tags a map from a slice of tuple values
     #[inline]
     fn tag_map_tuples<K, V>(&mut self, tag: RawTag, values: &[(K, V)])
     where
@@ -407,6 +431,7 @@ pub trait TdfSerializer: Sized {
         self.tag_map_iter_ref(tag, values.iter())
     }
 
+    /// Tags a map from an [ExactSizeIterator]
     fn tag_map_iter<I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = (K, V)> + ExactSizeIterator,
@@ -420,6 +445,7 @@ pub trait TdfSerializer: Sized {
         });
     }
 
+    /// Tags a map from an [ExactSizeIterator] of references to tuples
     fn tag_map_iter_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = &'i (K, V)> + ExactSizeIterator,
@@ -433,6 +459,8 @@ pub trait TdfSerializer: Sized {
         });
     }
 
+    /// Tags a map from an [ExactSizeIterator] of references to tuples of
+    /// references
     fn tag_map_iter_ref_ref<'i, I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = &'i (&'i K, &'i V)> + ExactSizeIterator,
@@ -446,6 +474,7 @@ pub trait TdfSerializer: Sized {
         });
     }
 
+    /// Tags a map from an [ExactSizeIterator] of owned values
     fn tag_map_iter_owned<I, K, V>(&mut self, tag: RawTag, iter: I)
     where
         I: Iterator<Item = (K, V)> + ExactSizeIterator,
@@ -461,11 +490,13 @@ pub trait TdfSerializer: Sized {
 
     // Union tagging
 
+    /// Tags the start of a union value
     fn tag_union_start(&mut self, tag: RawTag, key: u8) {
         Tagged::serialize_raw(self, tag, TdfType::TaggedUnion);
         self.write_byte(key);
     }
 
+    /// Tags a union and its value
     #[inline]
     fn tag_union_value<V>(&mut self, tag: RawTag, key: u8, value_tag: RawTag, value: &V)
     where
@@ -475,6 +506,7 @@ pub trait TdfSerializer: Sized {
         self.tag_ref(value_tag, value);
     }
 
+    /// Tags an unset union
     #[inline]
     fn tag_union_unset(&mut self, tag: RawTag) {
         self.tag_union_start(tag, TAGGED_UNSET_KEY);

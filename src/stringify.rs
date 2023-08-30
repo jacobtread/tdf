@@ -1,3 +1,6 @@
+//! Provides an implementation for re-processing serialized tdf bytes into a human-readable form
+//! see [TdfStringifier]
+
 use crate::{
     error::DecodeError,
     reader::TdfDeserializer,
@@ -9,14 +12,23 @@ use crate::{
 };
 use std::fmt::Display;
 
+/// Wrapper around a [TdfDeserializer] that deserializes the values into
+/// a human readable string format writing it onto the associated writer
 pub struct TdfStringifier<'de, W> {
+    /// The deserializer to read from
     pub r: TdfDeserializer<'de>,
+    /// The writer to write the human readable format to
     pub w: W,
 }
 
+/// Errors that can occur while stringifying
+///
+/// TODO: Extend this type to provided context info
 #[derive(Debug)]
 pub enum StringifyError {
+    /// Formatting error
     Format(std::fmt::Error),
+    /// Decoding error
     Decode(DecodeError),
 }
 
@@ -47,10 +59,13 @@ impl<'de, W> TdfStringifier<'de, W>
 where
     W: std::fmt::Write,
 {
+    /// Creates a new [TdfStringifier] from the provided reader and writer
     pub fn new(r: TdfDeserializer<'de>, w: W) -> TdfStringifier<'de, W> {
         Self { r, w }
     }
 
+    /// Creates a new [TdfStringifier] from the provided reader that writes
+    /// to a string
     pub fn new_string(r: TdfDeserializer<'de>) -> (String, bool) {
         let mut out = String::new();
         let mut this = TdfStringifier { r, w: &mut out };
@@ -58,6 +73,8 @@ where
         (out, success)
     }
 
+    /// Stringifies the contents of the reader writing the output to the writer
+    /// returns a bool indicating whether the deserialization failed
     pub fn stringify(&mut self) -> bool {
         while !self.r.is_empty() {
             if let Err(err) = self.stringify_tag(1) {
