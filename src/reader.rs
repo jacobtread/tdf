@@ -7,8 +7,8 @@
 //!
 //! You can create a deserializer using [TdfDeserializer::new] on a slice of bytes
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -25,8 +25,8 @@
 //!
 //! To read a deserializable value from the buffer you can use the [tag](TdfDeserializer::tag) function
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -47,8 +47,8 @@
 //! Sometimes tags aren't always present in the serialized message, to handle tags that might not
 //! always show up you can use the [try_tag](TdfDeserializer::try_tag) function
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -61,8 +61,8 @@
 //!
 //! To read within groups yo can use the [group](TdfDeserializer::group) function
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -85,8 +85,8 @@
 //! The group function will return any values that the action function returns. The action
 //! function accepts [FnMut] so it's also allowed to modify surrounding variables:
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -129,13 +129,13 @@
 //! read the header of a list and then manually implement the value reading. You can
 //! do this using [until_list](TdfDeserializer::until_list)
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
 //!
-//! let (value_ty, length): usize = r.until_list(b"LIST").unwrap();
+//! let (value_ty, length) = r.until_list(b"LIST").unwrap();
 //!
 //! for i in 0..length {
 //!     // Read complex items
@@ -148,9 +148,8 @@
 //! provides them to you. If you would like to have the types be a specific type you can use
 //! the [until_list_typed](TdfDeserializer::until_list_typed) function.
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
-//! use tdf::tag::TdfType;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -172,13 +171,13 @@
 //! read the header of a map and then manually implement the value reading. You can
 //! do this using [until_map](TdfDeserializer::until_map)
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
 //!
-//! let (key_ty, value_ty, length): usize = r.until_map(b"LIST").unwrap();
+//! let (key_ty, value_ty, length) = r.until_map(b"LIST").unwrap();
 //!
 //! for i in 0..length {
 //!     // Read key
@@ -192,9 +191,8 @@
 //! provides them to you. If you would like to have the types be a specific type you can use
 //! the [until_map_typed](TdfDeserializer::until_map_typed) function.
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
-//! use tdf::tag::TdfType;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
@@ -223,16 +221,16 @@
 //! > `try_until_tag` will attempt to find the tag and if it fails to find the tag it will reset
 //! > the cursor position and return false instead
 //!
-//! ```
-//! use tdf::reader::TdfDeserializer;
+//! ```no_run
+//! use tdf::prelude::*;
 //!
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
 //!
-//! r.until_tag(b"TEST").unwrap();
+//! r.until_tag(b"TEST", TdfType::String).unwrap();
 //! /* Operate on TEST */
 //!
-//! let exists = r.try_until_tag(b"BIN").unwrap();
+//! let exists = r.try_until_tag(b"BIN", TdfType::String).unwrap();
 //! if exists {
 //!    /* Tag exists, operate on it */
 //! }
@@ -284,13 +282,13 @@ impl<'de> TdfDeserializer<'de> {
     /// If this function completes successfully the cursor will be placed
     /// just after the tag in preparation to read the value.
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
     ///
-    /// r.until_tag(b"TEST").unwrap();
+    /// r.until_tag(b"TEST", TdfType::String).unwrap();
     /// /* Operate on TEST */
     /// ```
     ///
@@ -346,13 +344,13 @@ impl<'de> TdfDeserializer<'de> {
     /// If this function returns false the buffer cursor will be reset
     /// to where it was before this function was called
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
     ///
-    /// let exists = r.try_until_tag(b"BIN").unwrap();
+    /// let exists = r.try_until_tag(b"BIN", TdfType::String).unwrap();
     /// if exists {
     ///    /* Tag exists, operate on it */
     /// }
@@ -386,8 +384,8 @@ impl<'de> TdfDeserializer<'de> {
     ///
     /// Will return a [DecodeError::MissingTag] if the tag is not found.
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
@@ -412,8 +410,8 @@ impl<'de> TdfDeserializer<'de> {
     /// Will return [None] if the tag is not found and the cursor position
     /// will be reset to where it was before this function was called
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
@@ -440,8 +438,8 @@ impl<'de> TdfDeserializer<'de> {
     /// Attempts to find a group with the provided tag then runs the
     /// provided `action` on the group contents.
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
@@ -484,13 +482,13 @@ impl<'de> TdfDeserializer<'de> {
     /// it. If you would like the type to be enforced use the
     /// [until_list_typed](TdfDeserializer::until_list_typed) function
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
     ///
-    /// let (value_ty, length): usize = r.until_list(b"LIST").unwrap();
+    /// let (value_ty, length) = r.until_list(b"LIST").unwrap();
     ///
     /// for i in 0..length {
     ///     // Read complex items
@@ -517,7 +515,7 @@ impl<'de> TdfDeserializer<'de> {
     /// If you would like to manually handle the type checking you can use
     /// [until_list](TdfDeserializer::until_list) function
     ///
-    /// ```
+    /// ```no_run
     /// use tdf::reader::TdfDeserializer;
     /// use tdf::tag::TdfType;
     ///
@@ -556,13 +554,13 @@ impl<'de> TdfDeserializer<'de> {
     /// it. If you would like the type to be enforced use the
     /// [until_map_typed](TdfDeserializer::until_map_typed) function
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
     ///
-    /// let (key_ty, value_ty, length): usize = r.until_map(b"LIST").unwrap();
+    /// let (key_ty, value_ty, length) = r.until_map(b"LIST").unwrap();
     ///
     /// for i in 0..length {
     ///     // Read key
@@ -589,9 +587,8 @@ impl<'de> TdfDeserializer<'de> {
     /// If you would like to manually handle the type checking you can use
     /// [until_map](TdfDeserializer::until_map) function
     ///
-    /// ```
-    /// use tdf::reader::TdfDeserializer;
-    /// use tdf::tag::TdfType;
+    /// ```no_run
+    /// use tdf::prelude::*;
     ///
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
@@ -616,7 +613,7 @@ impl<'de> TdfDeserializer<'de> {
         tag: RawTag,
         key_type: TdfType,
         value_type: TdfType,
-    ) -> DecodeResult<(TdfType, TdfType, usize)> {
+    ) -> DecodeResult<usize> {
         self.until_tag(tag, TdfType::Map)?;
         let (key_ty, value_ty, length) = self.until_map(tag)?;
 
@@ -634,7 +631,7 @@ impl<'de> TdfDeserializer<'de> {
             });
         }
 
-        Ok((key_ty, value_ty, length))
+        Ok(length)
     }
 
     /// Obtains the remaining length in bytes left of

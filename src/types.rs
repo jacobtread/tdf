@@ -57,7 +57,7 @@ where
 ///     value: &'de str
 /// }
 ///
-/// impl<'de> TdfDeserialize<'de> for MyCustomStruct {
+/// impl<'de> TdfDeserialize<'de> for MyCustomStruct<'de> {
 ///     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
 ///         let test: u32 = r.tag(b"TEST")?;
 ///         let value: &str = r.tag(b"VALU")?;
@@ -82,7 +82,7 @@ where
 ///     value: &'de str
 /// }
 ///
-/// impl<'de> TdfDeserialize<'de> for MyCustomStruct {
+/// impl<'de> TdfDeserialize<'de> for MyCustomStruct<'de> {
 ///     fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
 ///         let test: u32 = r.tag(b"TEST")?;
 ///         let value: &str = r.tag(b"VALU")?;
