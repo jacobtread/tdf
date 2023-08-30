@@ -1,8 +1,9 @@
 [package]
 name = "tdf-derive"
 version = "0.0.0"
-description = "Derive macros for working with tdfs"
+description = "Derive macros for working with the tdf crate"
 
+keywords.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -13,7 +14,7 @@ readme.workspace = true
 [dependencies]
 darling = "0.20"
 quote = "1"
-syn = { version = "2", features = ["full"] }
+syn = "2"
 proc-macro2 = "1"
 
 [lib]
