@@ -10,6 +10,10 @@ Mass Effect 3, Mass Effect Andromeda, Battlefield 3, etc (Lots of EA games).
 This is a re-write of my previous library [blazepk](https://github.com/jacobtread/BlazePK-rs). This version provides much more accurate 
 naming and support for the different structures along with a derive macro implementation. 
 
+> **Note**
+> This library is unreleased and the 0.1.0 version has not yet been published to crates.io so you wont be able
+> to access it
+
 ## Cargo
 
 Using `tdf` with cargo
