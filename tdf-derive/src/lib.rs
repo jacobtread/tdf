@@ -7,6 +7,31 @@ use syn::{
     DeriveInput, Expr, Field, Fields, Generics, Ident, Lifetime, LifetimeParam,
 };
 
+#[derive(Debug)]
+struct DataTag([u8; 4]);
+
+impl FromMeta for DataTag {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        let mut out = [0u8; 4];
+
+        let input = value.as_bytes();
+        // Only copy the max of 4 bytes
+        let len = input.len().min(4);
+        out[0..len].copy_from_slice(input);
+
+        Ok(Self(out))
+    }
+}
+
+impl ToTokens for DataTag {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        tokens.append(Punct::new('&', proc_macro2::Spacing::Joint));
+        let [a, b, c, d] = &self.0;
+        let inner_stream = quote!(#a, #b, #c, #d);
+        tokens.append(Group::new(Delimiter::Bracket, inner_stream));
+    }
+}
+
 #[derive(Debug, FromAttributes)]
 #[darling(attributes(tdf), forward_attrs(allow, doc, cfg))]
 struct TdfFieldAttrs {
@@ -166,31 +191,6 @@ fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
         }
     }
     .into()
-}
-
-#[derive(Debug)]
-struct DataTag([u8; 4]);
-
-impl FromMeta for DataTag {
-    fn from_string(value: &str) -> darling::Result<Self> {
-        let mut out = [0u8; 4];
-
-        let input = value.as_bytes();
-        // Only copy the max of 4 bytes
-        let len = input.len().min(4);
-        out[0..len].copy_from_slice(input);
-
-        Ok(Self(out))
-    }
-}
-
-impl ToTokens for DataTag {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        tokens.append(Punct::new('&', proc_macro2::Spacing::Joint));
-        let [a, b, c, d] = &self.0;
-        let inner_stream = quote!(#a, #b, #c, #d);
-        tokens.append(Group::new(Delimiter::Bracket, inner_stream));
-    }
 }
 
 fn tag_field_serialize(
