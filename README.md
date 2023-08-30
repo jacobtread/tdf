@@ -18,7 +18,7 @@ naming and support for the different structures along with a derive macro implem
 
 Using `tdf` with cargo
 
-```yaml
+```toml
 [dependencies]
 tdf = "0.1"
 ```
@@ -316,4 +316,8 @@ pub enum ExampleTaggedEnum {
 
 ## Implementing TdfSerialize
 
+Refer to docs.rs/tdf
+
 ## Implementing TdfDeserialize
+
+Refer to docs.rs/tdf
