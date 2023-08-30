@@ -145,7 +145,7 @@ specify `#[tdf(group)]` on your structure:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(group)]
 pub struct ExampleStructure {
     #[tdf(tag = "TEST")]
@@ -154,12 +154,14 @@ pub struct ExampleStructure {
 
 ```
 
+Once a structure is marked as a group you can derive the `TdfTyped` and use it as a group in tags
+
 For structures that require a (2) prefix you can use the `#[tdf(prefix_two)]` attribute on the structure:
 
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(group, prefix_two)]
 pub struct ExampleStructure {
     #[tdf(tag = "TEST")]
@@ -184,7 +186,7 @@ you can define a repr enum:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u8)]
 pub enum ExampleReprEnum {
     Test = 0x0,
@@ -194,6 +196,8 @@ pub enum ExampleReprEnum {
 
 
 ```
+
+Don't forget to derive `TdfTyped` to use this value within tags
 
 > **Note**
 > When defining a repr enum you **MUST** use `#[repr(%TYPE%)]` otherwise the type will not be known
@@ -211,7 +215,7 @@ To prevent this behavior you can specify a default variant:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u8)]
 pub enum ExampleReprEnum {
     Test = 0x0,
@@ -231,7 +235,7 @@ You can represent BlazeSDK Tagged Unions as Rust enums with fields:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 pub enum ExampleTaggedEnum {
     #[tdf(key = 0x0, tag = "VALU")]
     Test {
@@ -262,7 +266,7 @@ To prevent this behavior you can specify a default variant:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 pub enum ExampleTaggedEnum {
     #[tdf(key = 0x0, tag = "VALU")]
     Test {
@@ -287,7 +291,7 @@ To prevent this behavior you can specify a unset variant:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize)]
+#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
 pub enum ExampleTaggedEnum {
     #[tdf(key = 0x0, tag = "VALU")]
     Test {
