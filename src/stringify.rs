@@ -228,6 +228,7 @@ where
         let start = self.r.cursor;
         let next_indent = indent + 1;
         let last_index = length.saturating_sub(1);
+        self.w.write_str("{\n")?;
 
         for i in 0..length {
             // Handle error while reading map entry
