@@ -1678,6 +1678,7 @@ pub mod u12 {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let data: [u8; 8] = r.read_fixed()?;
             let value: &str = <&str>::deserialize(r)?;
+            r.read_byte()?;
             Ok(Self { data, value })
         }
     }
@@ -1686,6 +1687,7 @@ pub mod u12 {
         fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             w.write_slice(&self.data);
             self.value.serialize(w);
+            w.write_byte(0);
         }
     }
 
