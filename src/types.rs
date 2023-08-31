@@ -1785,3 +1785,19 @@ pub mod group {
         }
     }
 }
+
+pub mod extra {
+    //! Extra typing for builtin types
+
+    use crate::{TdfDeserializeOwned, TdfSerialize};
+
+    impl TdfSerialize for () {
+        fn serialize<S: crate::TdfSerializer>(&self, _: &mut S) {}
+    }
+
+    impl TdfDeserializeOwned for () {
+        fn deserialize_owned(_: &mut crate::TdfDeserializer<'_>) -> crate::DecodeResult<Self> {
+            Ok(())
+        }
+    }
+}
