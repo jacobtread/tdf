@@ -822,6 +822,11 @@ pub mod map {
                 data: Vec::with_capacity(cap),
             }
         }
+
+        /// Returns the underlying vec of data
+        pub fn into_inner(self) -> Vec<(K, V)> {
+            self.data
+        }
     }
 
     impl<K: Ord, V> TdfMap<K, V> {
