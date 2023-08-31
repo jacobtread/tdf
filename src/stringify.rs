@@ -146,7 +146,7 @@ where
 
         self.w.write_str("Blob([")?;
 
-        let last_index = value.len() - 1;
+        let last_index = value.len().saturating_sub(1);
         for (index, value) in value.iter().enumerate() {
             write!(&mut self.w, "{:#X}", value)?;
             if index != last_index {
@@ -197,7 +197,7 @@ where
 
         let next_ident = indent + 1;
 
-        let last_index = length - 1;
+        let last_index = length.saturating_sub(1);
         for i in 0..length {
             if is_expanded {
                 self.write_indent(next_ident)?;
@@ -227,7 +227,7 @@ where
 
         let start = self.r.cursor;
         let next_indent = indent + 1;
-        let last_index = length - 1;
+        let last_index = length.saturating_sub(1);
 
         for i in 0..length {
             // Handle error while reading map entry
@@ -286,7 +286,7 @@ where
         let length = usize::deserialize_owned(&mut self.r)?;
         self.w.write_str("VarIntList [")?;
 
-        let last_index = length - 1;
+        let last_index = length.saturating_sub(1);
 
         for i in 0..length {
             self.stringify_var_int()?;
