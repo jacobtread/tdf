@@ -336,6 +336,19 @@ pub trait TdfSerializer: Sized {
         self.tag_group_end();
     }
 
+    /// Runs the provided `gr` function as the body
+    /// of a group then write the group end
+    ///
+    /// Useful for manually writing group lists
+    #[inline]
+    fn group_body<F>(&mut self, gr: F)
+    where
+        F: FnOnce(&mut Self),
+    {
+        gr(self);
+        self.tag_group_end();
+    }
+
     // List tagging
 
     /// Tags the start of a list for manual list writing
