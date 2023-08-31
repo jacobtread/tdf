@@ -1787,7 +1787,7 @@ pub mod group {
 }
 
 pub mod extra {
-    //! Extra typing for builtin types
+    //! Extra typing for builtin types required by upstream crates
 
     use crate::{TdfDeserializeOwned, TdfSerialize};
 
@@ -1798,6 +1798,30 @@ pub mod extra {
     impl TdfDeserializeOwned for () {
         fn deserialize_owned(_: &mut crate::TdfDeserializer<'_>) -> crate::DecodeResult<Self> {
             Ok(())
+        }
+    }
+
+    impl<T, E> TdfSerialize for Result<T, E>
+    where
+        T: TdfSerialize,
+        E: TdfSerialize,
+    {
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            match self {
+                Ok(value) => value.serialize(w),
+                Err(value) => value.serialize(w),
+            }
+        }
+    }
+
+    impl<T> TdfSerialize for Option<T>
+    where
+        T: TdfSerialize,
+    {
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            if let Some(value) = self {
+                value.serialize(w);
+            }
         }
     }
 }
