@@ -311,6 +311,13 @@ pub trait TdfSerializer: Sized {
         Tagged::serialize_raw(self, tag, TdfType::Group);
     }
 
+    /// Tags an empty group
+    #[inline]
+    fn tag_group_empty(&mut self, tag: RawTag) {
+        self.tag_group(tag);
+        self.tag_group_end();
+    }
+
     /// Tags the end of a group
     #[inline]
     fn tag_group_end(&mut self) {
