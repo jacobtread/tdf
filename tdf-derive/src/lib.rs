@@ -37,6 +37,8 @@ impl ToTokens for DataTag {
 struct TdfFieldAttrs {
     tag: Option<DataTag>,
     #[darling(default)]
+    into: Option<Expr>,
+    #[darling(default)]
     skip: bool,
 }
 
@@ -195,6 +197,7 @@ fn impl_type_tagged_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStream {
 
 fn tag_field_serialize(
     field: &Field,
+    into: Option<Expr>,
     tag: Option<DataTag>,
     is_struct: bool,
 ) -> proc_macro2::TokenStream {
@@ -202,11 +205,19 @@ fn tag_field_serialize(
     let ident = &field.ident;
     let ty = &field.ty;
 
-    if is_struct {
-        quote!( w.tag_ref::<#ty>(#tag, &self.#ident); )
+    // TODO: Validate tag
+
+    let mut value = if is_struct {
+        quote!(&self.#ident)
     } else {
-        quote! ( w.tag_ref::<#ty>(#tag, #ident); )
+        quote!(#ident)
+    };
+
+    if let Some(into) = into {
+        value = quote!(Into::<#into>::into(*#value))
     }
+
+    quote! ( w.tag_ref::<#ty>(#tag, #value); )
 }
 
 fn impl_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
@@ -222,7 +233,12 @@ fn impl_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream 
         if attributes.skip {
             None
         } else {
-            Some(tag_field_serialize(field, attributes.tag, true))
+            Some(tag_field_serialize(
+                field,
+                attributes.into,
+                attributes.tag,
+                true,
+            ))
         }
     });
 
@@ -322,7 +338,7 @@ fn impl_serialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
                         })
                         .map(|(field, attributes)| {
                             let ident = field.ident.as_ref().expect("Field missing ident");
-                            let serialize = tag_field_serialize(field, attributes.tag, false);
+                            let serialize = tag_field_serialize(field, attributes.into,attributes.tag, false);
                             (ident, serialize)
                         })
                         .unzip();
@@ -434,8 +450,11 @@ fn tag_field_deserialize(field: &Field) -> proc_macro2::TokenStream {
             .expect("Fields that arent skipped must specify a tag");
 
         // TODO: Validate tag
-
-        quote!( let #ident = r.tag::<#ty>(#tag)?; )
+        if let Some(into) = attributes.into {
+            quote!( let #ident = <#ty as From<#into>>::from(r.tag::<#into>(#tag)?); )
+        } else {
+            quote!( let #ident = r.tag::<#ty>(#tag)?; )
+        }
     }
 }
 
@@ -478,7 +497,6 @@ fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStrea
 }
 
 fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStream {
-    dbg!(&input.attrs);
     let repr = get_repr_attribute(&input.attrs)
         .expect("Non-tagged enums require #[repr({ty})] to be specified");
 
