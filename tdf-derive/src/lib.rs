@@ -207,17 +207,17 @@ fn tag_field_serialize(
 
     // TODO: Validate tag
 
-    let mut value = if is_struct {
+    let value = if is_struct {
         quote!(&self.#ident)
     } else {
         quote!(#ident)
     };
 
     if let Some(into) = into {
-        value = quote!(Into::<#into>::into(*#value))
+        quote!( w.tag_owned::<#into>(#tag, <#ty as Into::<#into>>::into(*#value)); )
+    } else {
+        quote! ( w.tag_ref::<#ty>(#tag, #value); )
     }
-
-    quote! ( w.tag_ref::<#ty>(#tag, #value); )
 }
 
 fn impl_serialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStream {
