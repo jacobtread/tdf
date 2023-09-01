@@ -1335,8 +1335,8 @@ pub mod var_int_list {
 
     impl VarIntList {
         /// Creates a new VarIntList
-        pub fn new() -> Self {
-            Self(Vec::default())
+        pub const fn new() -> Self {
+            Self(Vec::new())
         }
 
         /// Consumes self returning the underlying
@@ -1416,7 +1416,7 @@ pub mod object_type {
 
     impl ObjectType {
         /// Create a new [ObjectType] from its component and type
-        pub fn new(component: u16, ty: u16) -> Self {
+        pub const fn new(component: u16, ty: u16) -> Self {
             Self { component, ty }
         }
 
@@ -1504,12 +1504,12 @@ pub mod object_id {
 
     impl ObjectId {
         /// Create a new [ObjectId] from its type and id
-        pub fn new(ty: ObjectType, id: u64) -> Self {
+        pub const fn new(ty: ObjectType, id: u64) -> Self {
             Self { ty, id }
         }
 
         /// Create a new [ObjectId] from its component, type, and id
-        pub fn new_raw(component: u16, ty: u16, id: u64) -> Self {
+        pub const fn new_raw(component: u16, ty: u16, id: u64) -> Self {
             Self {
                 ty: ObjectType { component, ty },
                 id,
@@ -1653,6 +1653,7 @@ pub mod u12 {
     use super::{Blob, TdfDeserialize, TdfSerialize, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
+        GroupSlice,
     };
 
     /// [U12] The type/name for this structure is not yet known
@@ -1670,6 +1671,7 @@ pub mod u12 {
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             r.skip_length(8)?;
             Blob::skip(r)?;
+            GroupSlice::deserialize_group_end(r)?;
             Ok(())
         }
     }
@@ -1678,7 +1680,7 @@ pub mod u12 {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let data: [u8; 8] = r.read_fixed()?;
             let value: &str = <&str>::deserialize(r)?;
-            r.read_byte()?;
+            GroupSlice::deserialize_group_end(r)?;
             Ok(Self { data, value })
         }
     }
