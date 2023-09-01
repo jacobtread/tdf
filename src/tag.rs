@@ -75,22 +75,24 @@ impl TdfDeserializeOwned for Tagged {
         let ty: TdfType = TdfType::try_from(input[3])?;
         let mut output: [u8; 4] = [0, 0, 0, 0];
 
-        output[0] |= (input[0] & 0x80) >> 1;
-        output[0] |= (input[0] & 0x40) >> 2;
-        output[0] |= (input[0] & 0x30) >> 2;
-        output[0] |= (input[0] & 0x0C) >> 2;
+        fn decode(m: u8, c: u8) -> u8 {
+            if m & 0x40 == 0 {
+                0x30 | c
+            } else {
+                m | c
+            }
+        }
 
-        output[1] |= (input[0] & 0x02) << 5;
-        output[1] |= (input[0] & 0x01) << 4;
-        output[1] |= (input[1] & 0xF0) >> 4;
-
-        output[2] |= (input[1] & 0x08) << 3;
-        output[2] |= (input[1] & 0x04) << 2;
-        output[2] |= (input[1] & 0x03) << 2;
-        output[2] |= (input[2] & 0xC0) >> 6;
-
-        output[3] |= (input[2] & 0x20) << 1;
-        output[3] |= input[2] & 0x1F;
+        output[0] = decode((input[0] & 0x80) >> 1, (input[0] & 0x7C) >> 2);
+        output[1] = decode(
+            (input[0] & 2) << 5,
+            ((input[0] & 1) << 4) | ((input[1] & 0xF0) >> 4),
+        );
+        output[2] = decode(
+            (input[1] & 8) << 3,
+            ((input[1] & 7) << 2) | ((input[2] & 0xC0) >> 6),
+        );
+        output[3] = decode((input[2] & 0x20) << 1, input[2] & 0x1F);
 
         let tag = Tag(output);
 
