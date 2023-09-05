@@ -441,6 +441,12 @@ pub trait TdfSerializer: Sized {
         serialize_map_header(self, key, value, length);
     }
 
+    /// Tags the start of an empty map
+    fn tag_map_empty(&mut self, tag: RawTag, key: TdfType, value: TdfType) {
+        Tagged::serialize_raw(self, tag, TdfType::Map);
+        serialize_map_header(self, key, value, 0);
+    }
+
     /// Tags a map from a slice of tuple values
     #[inline]
     fn tag_map_tuples<K, V>(&mut self, tag: RawTag, values: &[(K, V)])
