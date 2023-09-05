@@ -69,7 +69,7 @@ impl Serialize for ObjectId {
     }
 }
 
-impl Serialize for U12<'_> {
+impl Serialize for U12 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
