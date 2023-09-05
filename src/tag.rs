@@ -76,7 +76,9 @@ impl TdfDeserializeOwned for Tagged {
         let mut output: [u8; 4] = [0, 0, 0, 0];
 
         fn decode(m: u8, c: u8) -> u8 {
-            if m & 0x40 == 0 {
+            if m | c == 0x00 {
+                0x0
+            } else if m & 0x40 == 0 {
                 0x30 | c
             } else {
                 m | c
