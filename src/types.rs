@@ -1653,20 +1653,20 @@ pub mod u12 {
     use super::{Blob, TdfDeserialize, TdfSerialize, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
-        GroupSlice,
+        GroupSlice, TdfDeserializeOwned,
     };
 
     /// [U12] The type/name for this structure is not yet known
     /// but is represented using 8 bytes of data and a string value
     #[derive(Debug)]
-    pub struct U12<'de> {
+    pub struct U12 {
         /// The leading byte value (Encoding not yet known)
         pub data: [u8; 8],
         /// Associated string value
-        pub value: &'de str,
+        pub value: String,
     }
 
-    impl U12<'_> {
+    impl U12 {
         /// Skips a U12 value while deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
             r.skip_length(8)?;
@@ -1676,16 +1676,16 @@ pub mod u12 {
         }
     }
 
-    impl<'de> TdfDeserialize<'de> for U12<'de> {
-        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+    impl TdfDeserializeOwned for U12 {
+        fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
             let data: [u8; 8] = r.read_fixed()?;
-            let value: &str = <&str>::deserialize(r)?;
+            let value: String = String::deserialize(r)?;
             GroupSlice::deserialize_group_end(r)?;
             Ok(Self { data, value })
         }
     }
 
-    impl TdfSerialize for U12<'_> {
+    impl TdfSerialize for U12 {
         fn serialize<S: TdfSerializer>(&self, w: &mut S) {
             w.write_slice(&self.data);
             self.value.serialize(w);
@@ -1693,7 +1693,7 @@ pub mod u12 {
         }
     }
 
-    impl TdfTyped for U12<'_> {
+    impl TdfTyped for U12 {
         const TYPE: TdfType = TdfType::U12;
     }
 }
