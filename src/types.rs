@@ -568,6 +568,13 @@ pub mod string {
         w.write_slice(&[1, 0]);
     }
 
+    impl<'de> TdfDeserialize<'de> for Cow<'de, str> {
+        fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
+            let value: &'de str = <&str>::deserialize(r)?;
+            Ok(Cow::Borrowed(value))
+        }
+    }
+
     impl<'de> TdfDeserialize<'de> for &'de str {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
             let bytes: &'de [u8] = Blob::deserialize_raw(r)?;
@@ -596,6 +603,15 @@ pub mod string {
 
             if needs_terminator {
                 w.write_byte(0);
+            }
+        }
+    }
+
+    impl TdfSerialize for Cow<'_, str> {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            match self {
+                Cow::Borrowed(value) => value.serialize(w),
+                Cow::Owned(value) => value.serialize(w),
             }
         }
     }
