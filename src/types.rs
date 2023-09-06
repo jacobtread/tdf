@@ -816,6 +816,27 @@ pub mod blob {
     impl TdfTyped for Blob<'_> {
         const TYPE: TdfType = TdfType::Blob;
     }
+
+    /// [OwnedBlob] is an alternative to [Blob] which created a copy
+    /// of the underlying bytes removing the associated lifetime
+    pub struct OwnedBlob(pub Vec<u8>);
+
+    impl TdfDeserializeOwned for OwnedBlob {
+        fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+            let blob = Blob::deserialize_raw(r)?;
+            Ok(Self(blob.to_vec()))
+        }
+    }
+
+    impl TdfSerialize for OwnedBlob {
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            Blob::serialize_raw(w, &self.0);
+        }
+    }
+
+    impl TdfTyped for OwnedBlob {
+        const TYPE: TdfType = TdfType::Blob;
+    }
 }
 
 pub mod list {
