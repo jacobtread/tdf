@@ -19,7 +19,7 @@ use std::fmt::{Debug, Display, Write};
 /// let tag: &[u8] = b"TEST";
 /// ```
 ///
-/// Tags can only contain A-Z and cannot be longer than 4 characters
+/// Tags can only contain A-Z 0-9 and cannot be longer than 4 characters
 /// numbers may not be encoded correctly
 pub type RawTag<'a> = &'a [u8];
 
@@ -229,5 +229,115 @@ impl TdfSerializeOwned for TdfType {
     fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
         let value = self as u8;
         w.write_byte(value);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{DecodeError, Tag, Tagged, TdfDeserialize, TdfDeserializer, TdfSerialize, TdfType};
+
+    static TYPE_MAPPING: &[(u8, TdfType)] = &[
+        (0x0, TdfType::VarInt),
+        (0x1, TdfType::String),
+        (0x2, TdfType::Blob),
+        (0x3, TdfType::Group),
+        (0x4, TdfType::List),
+        (0x5, TdfType::Map),
+        (0x6, TdfType::TaggedUnion),
+        (0x7, TdfType::VarIntList),
+        (0x8, TdfType::ObjectType),
+        (0x9, TdfType::ObjectId),
+        (0xA, TdfType::Float),
+        (0xC, TdfType::U12),
+    ];
+
+    #[test]
+    fn test_tag_serialize() {
+        let tags: &[(&[u8], &[u8])] = &[
+            (b"TEST", &[210, 92, 244]),
+            (b"1234", &[69, 36, 212]),
+            (b"AB12", &[134, 36, 82]),
+            (b"AB", &[134, 32, 0]),
+            (b"", &[0, 0, 0]),
+        ];
+
+        let mut w = Vec::new();
+
+        for (tag, expected) in tags {
+            Tagged::serialize_raw(&mut w, tag, TdfType::VarInt);
+
+            assert_eq!(&w[..3], *expected);
+
+            w.clear();
+        }
+    }
+
+    #[test]
+    fn test_tag_from_bytes() {
+        let tags: &[(&[u8], &[u8; 4])] = &[
+            (b"TEST", b"TEST"),
+            (b"1234", b"1234"),
+            (b"AB", b"AB\0\0"),
+            (b"", b"\0\0\0\0"),
+        ];
+
+        for (bytes, expected) in tags {
+            let tag = Tag::from(*bytes);
+            assert_eq!(&tag.0, *expected)
+        }
+    }
+
+    #[test]
+    fn test_tag_display() {
+        let tags: &[(&[u8], &str)] = &[
+            (b"TEST", "TEST"),
+            (b"1234", "1234"),
+            (b"AB", "AB"),
+            (b"", ""),
+        ];
+
+        for (bytes, expected) in tags {
+            let tag = Tag::from(*bytes);
+            let str = tag.to_string();
+
+            assert_eq!(str.as_str(), *expected)
+        }
+    }
+
+    #[test]
+    fn test_tdf_type_encoding() {
+        let mut w = Vec::new();
+        for (value, expected) in TYPE_MAPPING {
+            expected.serialize(&mut w);
+            assert_eq!(w[0], *value);
+
+            let mut r = TdfDeserializer::new(&w);
+            let ty = TdfType::deserialize(&mut r).unwrap();
+            assert_eq!(ty, *expected);
+
+            w.clear();
+        }
+    }
+
+    #[test]
+    fn test_tdf_type_into_byte() {
+        for (value, expected) in TYPE_MAPPING {
+            let raw = *expected as u8;
+            assert_eq!(*value, raw);
+        }
+    }
+
+    #[test]
+    fn test_tdf_type_from_byte() {
+        for (value, expected) in TYPE_MAPPING {
+            let ty = TdfType::try_from(*value).unwrap();
+            assert_eq!(ty, *expected);
+        }
+    }
+
+    #[test]
+    fn test_tdf_type_from_byte_unknown() {
+        let err = TdfType::try_from(0x99).unwrap_err();
+        assert!(matches!(err, DecodeError::UnknownType { ty: 0x99 }));
     }
 }
