@@ -104,6 +104,7 @@ When using generic types with TdfDeserialize you must specify the lifetime like 
 
 ```rust
 use tdf::prelude::*;
+use std::marker::PhantomData;
 
 #[derive(TdfSerialize, TdfDeserialize)]
 pub struct ExampleStructure<'de, T> 
@@ -128,7 +129,7 @@ use tdf::prelude::*;
 pub struct ExampleStructure {
     #[tdf(tag = "TEST")]
     pub my_value: u32,
-    #[tdf(default)]
+    #[tdf(skip)]
     pub skip_me: u32
 }
 
@@ -279,7 +280,7 @@ pub enum ExampleTaggedEnum {
         test: String,
     },
     #[tdf(key = 0x1, tag = "VALU")]
-    Test2(String)
+    Test2(String),
 
     #[tdf(default)]
     DefaultValue
@@ -304,7 +305,7 @@ pub enum ExampleTaggedEnum {
         test: String,
     },
     #[tdf(key = 0x1, tag = "VALU")]
-    Test2(String)
+    Test2(String),
 
     #[tdf(unset)]
     Unset

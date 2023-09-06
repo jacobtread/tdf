@@ -10,13 +10,19 @@
 //! When writing tagged structures you provide the by reference to the
 //! [TdfSerializer::tag_ref] function:
 //!
-//! TODO: Update code example to include a structure instead
-//!
 //! ```
-//! use tdf::writer::TdfSerializer;
+//! use tdf::prelude::*;
+//!
+//! #[derive(TdfSerialize, TdfTyped)]
+//! #[tdf(group)]
+//! struct Example {
+//!     #[tdf(tag = "TEST")]
+//!     field: u32
+//! }
 //!
 //! let mut w = Vec::new();
-//! w.tag_ref(b"TEST", &1);
+//! let test = Example { field: 12 };
+//! w.tag_ref(b"TEST", &test);
 //!
 //! ```
 //!
@@ -102,6 +108,7 @@
 //!
 //! Tagging functions for map types
 //!
+//! * [tag_map_start](TdfSerializer::tag_map_empty) - Special function for writing an empty map
 //! * [tag_map_start](TdfSerializer::tag_map_start) - Special function for writing a map header (Used to manually write list impl for complex types)
 //! * [tag_map_tuples](TdfSerializer::tag_map_tuples) - Special function for writing a map from a slice of key value pairs
 //!
