@@ -27,7 +27,7 @@ readme.workspace = true
 [dependencies]
 bytes = { version = "1", optional = true }
 serde = { version = "1", optional = true }
-tdf-derive = { path = "./tdf-derive", optional = true }
+tdf-derive = { version = "0.1.0", path = "./tdf-derive", optional = true }
 
 [features]
 # Default features enables BlazeSSL and serde
