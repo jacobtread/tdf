@@ -656,7 +656,7 @@ pub mod string {
         /// zero termined. Only tests [&str] as the other
         /// string types defer to it
         #[test]
-        fn test_str_encoding() {
+        fn test_str_serialize() {
             let values = &[
                 ("My example string", "My example string\0"),
                 ("Test", "Test\0"),
@@ -685,6 +685,31 @@ pub mod string {
                 // Reset buffer
                 w.clear();
             }
+        }
+    }
+
+    /// Tests that strings are deserialized correctly ensuring
+    /// the null terminator is removed
+    #[test]
+    fn test_str_deserialize() {
+        let values = &["My example string", "Test", "", "A"];
+
+        let mut w = Vec::new();
+
+        for value in values {
+            value.serialize(&mut w);
+
+            let mut r = TdfDeserializer::new(&w);
+            let str = <&str>::deserialize(&mut r).unwrap();
+            assert_eq!(str, *value);
+
+            r.cursor = 0;
+
+            let str = String::deserialize(&mut r).unwrap();
+            assert_eq!(str.as_str(), *value);
+
+            // Reset buffer
+            w.clear();
         }
     }
 }
