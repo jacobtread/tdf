@@ -22,8 +22,6 @@ pub struct TdfStringifier<'de, W> {
 }
 
 /// Errors that can occur while stringifying
-///
-/// TODO: Extend this type to provided context info
 #[derive(Debug)]
 pub enum StringifyError {
     /// Formatting error
