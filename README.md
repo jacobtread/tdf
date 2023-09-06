@@ -11,10 +11,6 @@ This is a re-write of my previous library [blazepk](https://github.com/jacobtrea
 naming and support for the different structures along with a derive macro implementation. This implementation also seperates out routing
 and packet framing which should be seperately as different versions use different framing implementations (Fire and Fire2)
 
-> **Note**
-> This library is unreleased and the 0.1.0 version has not yet been published to crates.io so you wont be able
-> to access it
-
 ## Cargo
 
 Using `tdf` with cargo
