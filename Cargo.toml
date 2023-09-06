@@ -7,14 +7,7 @@ license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
 repository = "https://github.com/jacobtread/tdf"
 readme = "README.md"
-keywords = [
-    "EA",
-    "serialization",
-    "deserialization",
-    "packet",
-    "blazepk",
-    "blazesdk",
-]
+keywords = ["EA", "serialization", "deserialization", "packet", "blazesdk"]
 
 [package]
 name = "tdf"
