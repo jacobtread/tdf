@@ -650,7 +650,7 @@ pub mod string {
 
     #[cfg(test)]
     mod test {
-        use crate::{serialize_vec, Blob, TdfDeserializer, TdfSerialize};
+        use crate::{serialize_vec, Blob, TdfDeserialize, TdfDeserializer, TdfSerialize};
 
         /// Tests that strings are encoded correctly and
         /// zero termined. Only tests [&str] as the other
@@ -686,30 +686,30 @@ pub mod string {
                 w.clear();
             }
         }
-    }
 
-    /// Tests that strings are deserialized correctly ensuring
-    /// the null terminator is removed
-    #[test]
-    fn test_str_deserialize() {
-        let values = &["My example string", "Test", "", "A"];
+        /// Tests that strings are deserialized correctly ensuring
+        /// the null terminator is removed
+        #[test]
+        fn test_str_deserialize() {
+            let values = &["My example string", "Test", "", "A"];
 
-        let mut w = Vec::new();
+            let mut w = Vec::new();
 
-        for value in values {
-            value.serialize(&mut w);
+            for value in values {
+                value.serialize(&mut w);
 
-            let mut r = TdfDeserializer::new(&w);
-            let str = <&str>::deserialize(&mut r).unwrap();
-            assert_eq!(str, *value);
+                let mut r = TdfDeserializer::new(&w);
+                let str = <&str>::deserialize(&mut r).unwrap();
+                assert_eq!(str, *value);
 
-            r.cursor = 0;
+                r.cursor = 0;
 
-            let str = String::deserialize(&mut r).unwrap();
-            assert_eq!(str.as_str(), *value);
+                let str = String::deserialize(&mut r).unwrap();
+                assert_eq!(str.as_str(), *value);
 
-            // Reset buffer
-            w.clear();
+                // Reset buffer
+                w.clear();
+            }
         }
     }
 }
