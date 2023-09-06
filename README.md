@@ -29,6 +29,17 @@ or
 cargo add tdf
 ```
 
+### Crate Features
+
+The default features are `["serde", "derive"]`
+
+| Feature    | Description                                                                         |
+| ---------- | ----------------------------------------------------------------------------------- |
+| **serde**  | Adds support for serde serialization of tdf types                                   |
+| **bytes**  | Adds support for serializing directly onto BytesMut types from the bytes crate      |
+| **derive** | Adds support for using `tdf-derive` derive macros for deriving structures and enums |
+
+
 ## Derive Macros
 
 Tdf comes with the feature flag `derive` (Enabled by default) which allows deriving deserialize and serialize implementations automatically. There are 3 derive macros
