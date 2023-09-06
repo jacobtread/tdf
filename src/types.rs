@@ -647,6 +647,46 @@ pub mod string {
     impl TdfTyped for Cow<'_, str> {
         const TYPE: TdfType = TdfType::String;
     }
+
+    #[cfg(test)]
+    mod test {
+        use crate::{serialize_vec, Blob, TdfDeserializer, TdfSerialize};
+
+        /// Tests that strings are encoded correctly and
+        /// zero termined. Only tests [&str] as the other
+        /// string types defer to it
+        #[test]
+        fn test_str_encoding() {
+            let values = &[
+                ("My example string", "My example string\0"),
+                ("Test", "Test\0"),
+                ("", "\0"),
+                ("A", "A\0"),
+            ];
+
+            let mut w = Vec::new();
+
+            for (value, expected) in values {
+                value.serialize(&mut w);
+
+                let expected_len = value.len() + 1; /* Length includes terminator */
+                let length_bytes = serialize_vec(&expected_len);
+
+                // Serialized content should start with the string length
+                assert!(w.starts_with(&length_bytes));
+                // Should end with a null terminator
+                assert!(w.ends_with(&[0]));
+
+                let mut r = TdfDeserializer::new(&w);
+                let str_bytes = Blob::deserialize_raw(&mut r).unwrap();
+
+                assert_eq!(expected.as_bytes(), str_bytes);
+
+                // Reset buffer
+                w.clear();
+            }
+        }
+    }
 }
 
 pub mod blob {
