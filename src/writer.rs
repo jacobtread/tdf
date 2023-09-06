@@ -133,6 +133,14 @@
 //! * [tag_union_start](TdfSerializer::tag_union_start) - Special function for writing a tagged union header (Used to manually write list impl for complex types)
 //! * [tag_union_value](TdfSerializer::tag_union_value) - Special function for writing a tagged union
 //! * [tag_union_unset](TdfSerializer::tag_union_unset) - Special function for writing a tagged union with an unset value
+//!
+//! ### Groups
+//!
+//! * [tag_group](TdfSerializer::tag_group) - Special function for tagging the start of a group
+//! * [tag_group_empty](TdfSerializer::tag_group_empty) - Special function for tagging an empty group
+//! * [tag_group_end](TdfSerializer::tag_group_end) - Special function for tagging an the end of a group
+//! * [group](TdfSerializer::group) - Special function for writing a group tag based on a closure
+//! * [group_body](TdfSerializer::group_body) - Special function for writing a group based on a closure (Excluding start tag) and ends the group
 
 use crate::{
     tag::{RawTag, Tagged, TdfType},
@@ -159,13 +167,19 @@ pub trait TdfSerializer: Sized {
     /// for strings, and slices use [TdfSerializer::tag_alt] and for primitives
     /// types use [TdfSerializer::tag_owned]
     ///
-    /// TODO: Update code example to include a structure instead
-    ///
     /// ```
-    /// use tdf::writer::TdfSerializer;
+    /// use tdf::prelude::*;
+    ///
+    /// #[derive(TdfSerialize, TdfTyped)]
+    /// #[tdf(group)]
+    /// struct Example {
+    ///     #[tdf(tag = "TEST")]
+    ///     field: u32
+    /// }    
     ///
     /// let mut w = Vec::new();
-    /// w.tag_ref(b"TEST", &1);
+    /// let test = Example { field: 12 };
+    /// w.tag_ref(b"TEST", &test);
     ///
     /// ```
     ///
