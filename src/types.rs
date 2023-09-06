@@ -1398,7 +1398,7 @@ pub mod map {
             map.insert(6, 6);
             map.insert(9, 9);
 
-            let keys = |s: &[(_, _)]| s.into_iter().map(|e| e.0).collect::<Vec<u32>>();
+            let keys = |s: &[(_, _)]| s.iter().map(|e| e.0).collect::<Vec<u32>>();
 
             for start in 0..11 {
                 for end in 0..11 {
