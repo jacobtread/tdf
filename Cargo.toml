@@ -31,7 +31,7 @@ tdf-derive = { path = "./tdf-derive", optional = true }
 
 [features]
 # Default features enables BlazeSSL and serde
-default = ["serde", "bytes", "derive"]
+default = ["serde", "derive"]
 # Type serialization with serde
 serde = ["dep:serde"]
 # BytesMut writer implementation
