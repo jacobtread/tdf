@@ -43,6 +43,9 @@ impl Tagged {
 
     /// Serializes a tagged value from the raw tag and value type
     pub fn serialize_raw<S: TdfSerializer>(w: &mut S, tag: RawTag, value_type: TdfType) {
+        debug_assert!(tag.len() <= 4, "Tag cannot be longer than 4 bytes");
+        debug_assert!(!tag.is_empty(), "Tag cannot be empty");
+
         let mut output: [u8; 4] = [0, 0, 0, value_type as u8];
         let length: usize = tag.len();
         if length > 0 {
@@ -252,13 +255,26 @@ mod test {
     ];
 
     #[test]
+    #[should_panic(expected = "Tag cannot be longer than 4 bytes")]
+    fn test_tag_too_long() {
+        let mut w = Vec::new();
+        Tagged::serialize_raw(&mut w, b"TEST1", TdfType::VarInt);
+    }
+
+    #[test]
+    #[should_panic(expected = "Tag cannot be empty")]
+    fn test_tag_empty() {
+        let mut w = Vec::new();
+        Tagged::serialize_raw(&mut w, b"", TdfType::VarInt);
+    }
+
+    #[test]
     fn test_tag_serialize() {
         let tags: &[(&[u8], &[u8])] = &[
             (b"TEST", &[210, 92, 244]),
             (b"1234", &[69, 36, 212]),
             (b"AB12", &[134, 36, 82]),
             (b"AB", &[134, 32, 0]),
-            (b"", &[0, 0, 0]),
         ];
 
         let mut w = Vec::new();
