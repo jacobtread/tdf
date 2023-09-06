@@ -1820,16 +1820,20 @@ pub mod extra {
 
     use crate::{TdfDeserializeOwned, TdfSerialize};
 
+    /// Unit type can be serialized as nothing
     impl TdfSerialize for () {
         fn serialize<S: crate::TdfSerializer>(&self, _: &mut S) {}
     }
 
+    /// Unit type can be deserialized from nothing
     impl TdfDeserializeOwned for () {
         fn deserialize_owned(_: &mut crate::TdfDeserializer<'_>) -> crate::DecodeResult<Self> {
             Ok(())
         }
     }
 
+    /// [Result] types can serializes from either branch as long
+    /// as both branches implement [TdfSerialize]
     impl<T, E> TdfSerialize for Result<T, E>
     where
         T: TdfSerialize,
@@ -1843,6 +1847,8 @@ pub mod extra {
         }
     }
 
+    /// [Option] types can be serialized as something or as nothing
+    /// depdning on the value.
     impl<T> TdfSerialize for Option<T>
     where
         T: TdfSerialize,
