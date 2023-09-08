@@ -12,6 +12,9 @@ struct DataTag([u8; 4]);
 
 impl FromMeta for DataTag {
     fn from_string(value: &str) -> darling::Result<Self> {
+        assert!(value.len() <= 4, "Tag cannot be longer than 4 bytes");
+        assert!(!value.is_empty(), "Tag cannot be empty");
+
         let mut out = [0u8; 4];
 
         let input = value.as_bytes();
