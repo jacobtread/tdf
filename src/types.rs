@@ -23,6 +23,25 @@ where
     output
 }
 
+#[cfg(feature = "bytes")]
+pub mod bytes {
+    //! Provides helper functions for the "bytes" feature flag
+
+    use bytes::Bytes;
+
+    use crate::{serialize_vec, TdfSerialize};
+
+    /// Serializes the provided [TdfSerialize] type
+    /// as a [Bytes]
+    #[inline]
+    pub fn serialize_bytes<V>(value: &V) -> Bytes
+    where
+        V: TdfSerialize,
+    {
+        Bytes::from(serialize_vec(value))
+    }
+}
+
 /// [TdfDeserialize] trait implemented by structures that can
 /// be deserialized from bytes of tdf values
 ///
