@@ -1787,6 +1787,12 @@ pub mod object_type {
     }
 
     impl ObjectType {
+        /// Creates a new [ObjectType] where the values are all zero
+        #[inline]
+        pub const fn zero() -> Self {
+            Self::new(0, 0)
+        }
+
         /// Create a new [ObjectType] from its component and type
         pub const fn new(component: u16, ty: u16) -> Self {
             Self { component, ty }
@@ -1875,6 +1881,12 @@ pub mod object_id {
     }
 
     impl ObjectId {
+        /// Creates a new [ObjectId] where the values are all zero
+        #[inline]
+        pub const fn zero() -> Self {
+            Self::new(ObjectType::zero(), 0)
+        }
+
         /// Create a new [ObjectId] from its type and id
         pub const fn new(ty: ObjectType, id: u64) -> Self {
             Self { ty, id }
