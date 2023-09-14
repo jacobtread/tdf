@@ -279,6 +279,13 @@ fn impl_serialize_repr_enum(input: &DeriveInput, _data: &DataEnum) -> TokenStrea
                 <#repr as tdf::TdfSerializeOwned>::serialize_owned(self as #repr, w);
             }
         }
+
+        impl tdf::TdfSerialize for #ident {
+            #[inline]
+            fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+               tdf::TdfSerializeOwned::serialize_owned(*self, w);
+            }
+        }
     }
     .into()
 }
