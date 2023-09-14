@@ -214,6 +214,11 @@ pub trait TdfSerialize: Sized {
     fn serialize<S: TdfSerializer>(&self, w: &mut S);
 }
 
+/// INTERNAL API
+///
+/// You should not implement this, this is only intended for serializing
+/// primitives internally through writer APIs without double dereferencing
+///
 /// [TdfSerializeOwned] trait implemented by structures that
 /// can be serialized in their owned value form.
 ///
@@ -226,19 +231,6 @@ pub trait TdfSerializeOwned: Sized {
     /// actual implementation is similar to normal serialization
     /// see [TdfSerialize] for examples
     fn serialize_owned<S: TdfSerializer>(self, w: &mut S);
-}
-
-/// Types that implement [TdfSerializeOwned] and [Copy] (Primitive values)
-/// automatically implement [TdfSerialize] by copying the provided value
-/// and serializing it in its owned form
-impl<T> TdfSerialize for T
-where
-    T: TdfSerializeOwned + Copy,
-{
-    #[inline]
-    fn serialize<S: TdfSerializer>(&self, w: &mut S) {
-        (*self).serialize_owned(w)
-    }
 }
 
 /// Associated trait for types that can be encoded/decoded
@@ -256,6 +248,7 @@ pub mod var_int {
     use super::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
+        TdfSerialize,
     };
 
     /// Skips amy un-read bytes from a variable-length integer
@@ -327,6 +320,13 @@ pub mod var_int {
         }
     }
 
+    impl TdfSerialize for bool {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
+        }
+    }
+
     impl TdfTyped for bool {
         const TYPE: TdfType = TdfType::VarInt;
     }
@@ -342,6 +342,13 @@ pub mod var_int {
     impl TdfSerializeOwned for u8 {
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w)
+        }
+    }
+
+    impl TdfSerialize for u8 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -365,6 +372,13 @@ pub mod var_int {
         }
     }
 
+    impl TdfSerialize for i8 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
+        }
+    }
+
     impl TdfTyped for i8 {
         const TYPE: TdfType = TdfType::VarInt;
     }
@@ -380,6 +394,13 @@ pub mod var_int {
     impl TdfSerializeOwned for u16 {
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w)
+        }
+    }
+
+    impl TdfSerialize for u16 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -403,6 +424,13 @@ pub mod var_int {
         }
     }
 
+    impl TdfSerialize for i16 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
+        }
+    }
+
     impl TdfTyped for i16 {
         const TYPE: TdfType = TdfType::VarInt;
     }
@@ -418,6 +446,13 @@ pub mod var_int {
     impl TdfSerializeOwned for u32 {
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w)
+        }
+    }
+
+    impl TdfSerialize for u32 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -441,6 +476,13 @@ pub mod var_int {
         }
     }
 
+    impl TdfSerialize for i32 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
+        }
+    }
+
     impl TdfTyped for i32 {
         const TYPE: TdfType = TdfType::VarInt;
     }
@@ -456,6 +498,13 @@ pub mod var_int {
     impl TdfSerializeOwned for u64 {
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w);
+        }
+    }
+
+    impl TdfSerialize for u64 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -479,6 +528,13 @@ pub mod var_int {
         }
     }
 
+    impl TdfSerialize for i64 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
+        }
+    }
+
     impl TdfTyped for i64 {
         const TYPE: TdfType = TdfType::VarInt;
     }
@@ -494,6 +550,13 @@ pub mod var_int {
     impl TdfSerializeOwned for usize {
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             impl_serialize_int!(self, w);
+        }
+    }
+
+    impl TdfSerialize for usize {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -514,6 +577,13 @@ pub mod var_int {
         #[inline]
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             (self as usize).serialize_owned(w);
+        }
+    }
+
+    impl TdfSerialize for isize {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -1973,6 +2043,7 @@ pub mod float {
     use super::{TdfDeserializeOwned, TdfSerializeOwned, TdfTyped};
     use crate::{
         error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
+        TdfSerialize,
     };
 
     /// Skips the 4 bytes required for a 32 bit float value
@@ -1992,6 +2063,13 @@ pub mod float {
         fn serialize_owned<S: TdfSerializer>(self, w: &mut S) {
             let bytes: [u8; 4] = self.to_be_bytes();
             w.write_slice(&bytes);
+        }
+    }
+
+    impl TdfSerialize for f32 {
+        #[inline]
+        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
+            (*self).serialize_owned(w)
         }
     }
 
@@ -2182,7 +2260,9 @@ pub mod group {
 pub mod extra {
     //! Extra typing for builtin types required by upstream crates
 
-    use crate::{TdfDeserializeOwned, TdfSerialize};
+    use std::{borrow::Cow, rc::Rc, sync::Arc};
+
+    use crate::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize};
 
     /// Unit type can be serialized as nothing
     impl TdfSerialize for () {
@@ -2221,6 +2301,109 @@ pub mod extra {
             if let Some(value) = self {
                 value.serialize(w);
             }
+        }
+    }
+
+    impl<T> TdfSerialize for &T
+    where
+        T: TdfSerialize,
+    {
+        #[inline]
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            TdfSerialize::serialize(*self, w);
+        }
+    }
+
+    impl<T> TdfSerialize for &mut T
+    where
+        T: TdfSerialize,
+    {
+        #[inline]
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            TdfSerialize::serialize(*self, w);
+        }
+    }
+
+    impl<T> TdfSerialize for Box<T>
+    where
+        T: TdfSerialize,
+    {
+        #[inline]
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            TdfSerialize::serialize(self.as_ref(), w);
+        }
+    }
+
+    impl<T> TdfSerialize for Rc<T>
+    where
+        T: TdfSerialize,
+    {
+        #[inline]
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            TdfSerialize::serialize(self.as_ref(), w);
+        }
+    }
+
+    impl<T> TdfSerialize for Arc<T>
+    where
+        T: TdfSerialize,
+    {
+        #[inline]
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            TdfSerialize::serialize(self.as_ref(), w);
+        }
+    }
+
+    impl<T> TdfSerialize for Cow<'_, T>
+    where
+        T: TdfSerialize + ToOwned,
+        T::Owned: TdfSerialize,
+    {
+        fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
+            match self {
+                Cow::Borrowed(value) => (**value).serialize(w),
+                Cow::Owned(value) => (*value).serialize(w),
+            };
+        }
+    }
+
+    impl<T> TdfDeserializeOwned for Box<T>
+    where
+        T: for<'de> TdfDeserialize<'de>,
+    {
+        #[inline]
+        fn deserialize_owned(r: &mut crate::TdfDeserializer<'_>) -> crate::DecodeResult<Self> {
+            T::deserialize(r).map(Box::new)
+        }
+    }
+
+    impl<T> TdfDeserializeOwned for Rc<T>
+    where
+        T: for<'de> TdfDeserialize<'de>,
+    {
+        #[inline]
+        fn deserialize_owned(r: &mut crate::TdfDeserializer<'_>) -> crate::DecodeResult<Self> {
+            T::deserialize(r).map(Rc::new)
+        }
+    }
+
+    impl<T> TdfDeserializeOwned for Arc<T>
+    where
+        T: for<'de> TdfDeserialize<'de>,
+    {
+        #[inline]
+        fn deserialize_owned(r: &mut crate::TdfDeserializer<'_>) -> crate::DecodeResult<Self> {
+            T::deserialize(r).map(Arc::new)
+        }
+    }
+
+    impl<'de, T> TdfDeserialize<'de> for Cow<'de, T>
+    where
+        T: ToOwned,
+        T::Owned: TdfDeserialize<'de>,
+    {
+        fn deserialize(r: &mut crate::TdfDeserializer<'de>) -> crate::DecodeResult<Self> {
+            <T::Owned as TdfDeserialize<'de>>::deserialize(r).map(Cow::Owned)
         }
     }
 }

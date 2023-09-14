@@ -237,7 +237,10 @@ impl TdfSerializeOwned for TdfType {
 
 #[cfg(test)]
 mod test {
-    use crate::{DecodeError, Tag, Tagged, TdfDeserialize, TdfDeserializer, TdfSerialize, TdfType};
+    use crate::{
+        types::TdfSerializeOwned, DecodeError, Tag, Tagged, TdfDeserialize, TdfDeserializer,
+        TdfType,
+    };
 
     static TYPE_MAPPING: &[(u8, TdfType)] = &[
         (0x0, TdfType::VarInt),
@@ -324,7 +327,7 @@ mod test {
     fn test_tdf_type_encoding() {
         let mut w = Vec::new();
         for (value, expected) in TYPE_MAPPING {
-            expected.serialize(&mut w);
+            expected.serialize_owned(&mut w);
             assert_eq!(w[0], *value);
 
             let mut r = TdfDeserializer::new(&w);
