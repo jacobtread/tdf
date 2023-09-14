@@ -11,7 +11,7 @@ keywords = ["EA", "serialization", "deserialization", "packet", "blazesdk"]
 
 [package]
 name = "tdf"
-version = "0.1.1"
+version = "0.1.2"
 
 categories = ["network-programming", "parser-implementations"]
 description = "Library for deserializing and serializing tdf values from BlazeSDK"
