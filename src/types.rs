@@ -2262,7 +2262,7 @@ pub mod extra {
 
     use std::{borrow::Cow, rc::Rc, sync::Arc};
 
-    use crate::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize};
+    use crate::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
 
     /// Unit type can be serialized as nothing
     impl TdfSerialize for () {
@@ -2314,6 +2314,13 @@ pub mod extra {
         }
     }
 
+    impl<T> TdfTyped for &T
+    where
+        T: TdfTyped,
+    {
+        const TYPE: TdfType = T::TYPE;
+    }
+
     impl<T> TdfSerialize for &mut T
     where
         T: TdfSerialize,
@@ -2322,6 +2329,13 @@ pub mod extra {
         fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
             TdfSerialize::serialize(*self, w);
         }
+    }
+
+    impl<T> TdfTyped for &mut T
+    where
+        T: TdfTyped,
+    {
+        const TYPE: TdfType = T::TYPE;
     }
 
     impl<T> TdfSerialize for Box<T>
@@ -2334,6 +2348,13 @@ pub mod extra {
         }
     }
 
+    impl<T> TdfTyped for Box<T>
+    where
+        T: TdfTyped,
+    {
+        const TYPE: TdfType = T::TYPE;
+    }
+
     impl<T> TdfSerialize for Rc<T>
     where
         T: TdfSerialize,
@@ -2344,6 +2365,13 @@ pub mod extra {
         }
     }
 
+    impl<T> TdfTyped for Rc<T>
+    where
+        T: TdfTyped,
+    {
+        const TYPE: TdfType = T::TYPE;
+    }
+
     impl<T> TdfSerialize for Arc<T>
     where
         T: TdfSerialize,
@@ -2352,6 +2380,13 @@ pub mod extra {
         fn serialize<S: crate::TdfSerializer>(&self, w: &mut S) {
             TdfSerialize::serialize(self.as_ref(), w);
         }
+    }
+
+    impl<T> TdfTyped for Arc<T>
+    where
+        T: TdfTyped,
+    {
+        const TYPE: TdfType = T::TYPE;
     }
 
     impl<T> TdfSerialize for Cow<'_, T>
@@ -2365,6 +2400,13 @@ pub mod extra {
                 Cow::Owned(value) => (*value).serialize(w),
             };
         }
+    }
+
+    impl<T> TdfTyped for Cow<'_, T>
+    where
+        T: TdfTyped + ToOwned,
+    {
+        const TYPE: TdfType = T::TYPE;
     }
 
     impl<T> TdfDeserializeOwned for Box<T>
