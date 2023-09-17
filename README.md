@@ -196,10 +196,13 @@ you can define a repr enum:
 > **Note**
 > Repr enums are serialized as variable-length integers aka TdfType::VarInt
 
+> **Note**
+> Repr enums that implement TdfSerialize must also implement Clone + Copy
+
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
+#[derive(Clone, Copy, TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u8)]
 pub enum ExampleReprEnum {
     Test = 0x0,
@@ -228,7 +231,7 @@ To prevent this behavior you can specify a default variant:
 ```rust
 use tdf::prelude::*;
 
-#[derive(TdfSerialize, TdfDeserialize, TdfTyped)]
+#[derive(Clone, Copy, TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u8)]
 pub enum ExampleReprEnum {
     Test = 0x0,
