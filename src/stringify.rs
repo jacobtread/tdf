@@ -74,6 +74,10 @@ where
     /// Stringifies the contents of the reader writing the output to the writer
     /// returns a bool indicating whether the deserialization failed
     pub fn stringify(&mut self) -> bool {
+        if self.w.write_str("{\n").is_err() {
+            return false;
+        }
+
         while !self.r.is_empty() {
             if let Err(err) = self.stringify_tag(1) {
                 let remaining = &self.r.buffer[self.r.cursor..];
@@ -88,6 +92,8 @@ where
                 return false;
             }
         }
+
+        _ = self.w.write_char('}');
 
         true
     }
