@@ -138,9 +138,9 @@ where
     }
 
     fn stringify_string(&mut self) -> StringifyResult {
-        let value = <&str>::deserialize(&mut self.r)?;
+        let value = String::deserialize(&mut self.r)?;
         self.w.write_char('"')?;
-        self.w.write_str(value)?;
+        self.w.write_str(&value)?;
         self.w.write_char('"')?;
         Ok(())
     }
