@@ -175,8 +175,8 @@ pub enum TdfType {
     ObjectId = 0x9,
     /// Float values
     Float = 0xA,
-    /// U12 (Unknown naming at this stage)
-    U12 = 0xC,
+    /// Generic type
+    Generic = 0xC,
 }
 
 /// Convert bytes back to tdf types
@@ -196,7 +196,7 @@ impl TryFrom<u8> for TdfType {
             0x8 => TdfType::ObjectType,
             0x9 => TdfType::ObjectId,
             0xA => TdfType::Float,
-            0xC => TdfType::U12,
+            0xC => TdfType::Generic,
             ty => return Err(DecodeError::UnknownType { ty }),
         })
     }
@@ -216,7 +216,7 @@ impl TdfType {
             TdfType::ObjectType => ObjectType::skip(r),
             TdfType::ObjectId => ObjectId::skip(r),
             TdfType::Float => skip_f32(r),
-            TdfType::U12 => U12::skip(r),
+            TdfType::Generic => U12::skip(r),
         }
     }
 }
@@ -254,7 +254,7 @@ mod test {
         (0x8, TdfType::ObjectType),
         (0x9, TdfType::ObjectId),
         (0xA, TdfType::Float),
-        (0xC, TdfType::U12),
+        (0xC, TdfType::Generic),
     ];
 
     #[test]

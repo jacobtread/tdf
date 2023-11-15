@@ -127,7 +127,7 @@ where
             TdfType::ObjectType => self.stringify_object_type(),
             TdfType::ObjectId => self.stringify_object_id(),
             TdfType::Float => self.stringify_f32(),
-            TdfType::U12 => self.stringify_u12(),
+            TdfType::Generic => self.stringify_u12(),
         }
     }
 

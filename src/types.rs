@@ -2156,7 +2156,7 @@ pub mod u12 {
     }
 
     impl TdfTyped for U12 {
-        const TYPE: TdfType = TdfType::U12;
+        const TYPE: TdfType = TdfType::Generic;
     }
 }
 
