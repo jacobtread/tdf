@@ -179,6 +179,22 @@ pub enum TdfType {
     Generic = 0xC,
 }
 
+impl TdfType {
+    /// Gets the heat bug version of this tdf type
+    ///
+    /// With the head bug in blaze sdk when encoding lists of Unions, Maps,
+    /// or Sub lists they are incorrectly encoded as Group types, in order
+    /// to be compatable with clients this bug must be emulated for the
+    /// "heat-compat" feature flag
+    #[cfg(feature = "heat-compat")]
+    pub fn heat_compat_list_type(self) -> TdfType {
+        match self {
+            Self::TaggedUnion | Self::Map | Self::List => TdfType::Group,
+            _ => self,
+        }
+    }
+}
+
 /// Convert bytes back to tdf types
 impl TryFrom<u8> for TdfType {
     type Error = DecodeError;

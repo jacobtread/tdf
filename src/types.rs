@@ -952,7 +952,17 @@ pub mod list {
     /// Serializes the header portion of a list, which contains the
     /// type and length of the list
     pub fn serialize_list_header<S: TdfSerializer>(w: &mut S, ty: TdfType, length: usize) {
-        ty.serialize_owned(w);
+        #[cfg(feature = "heat-compat")]
+        {
+            let ty = ty.heat_compat_list_type();
+            ty.serialize_owned(w);
+        }
+
+        #[cfg(not(feature = "heat-compat"))]
+        {
+            ty.serialize_owned(w);
+        }
+
         length.serialize_owned(w);
     }
 
