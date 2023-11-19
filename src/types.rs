@@ -2186,22 +2186,20 @@ pub mod group {
     /// * [GroupSlice::deserialize_content] - Attempt to deserialize the content using an action
     /// * [GroupSlice::deserialize_content_skip] - Attempt to deserialize the content skipping all values
     pub struct GroupSlice<'de> {
-        /// Whether the group is prefixed by a 2
-        pub is_two: bool,
         /// The encoded byte contents of the group
         pub data: &'de [u8],
     }
 
     impl GroupSlice<'_> {
-        /// Attempts to read a byte and if the value is two the group starts with
-        /// a two prefix otherwise the cursor is stepped back and reading should
-        /// continue as normal
-        pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<bool> {
+        /// This is a product of the heat bug, this value is not actualy apart
+        /// of structs but is handled here as it has been encounted in the HNET
+        /// list where a union is miss encoded as a struct
+        pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<()> {
             let is_two = r.read_byte()? == 2;
             if !is_two {
                 r.step_back();
             }
-            Ok(is_two)
+            Ok(())
         }
 
         /// Attempts to read a byte if the byte value is zero the group is
@@ -2252,7 +2250,10 @@ pub mod group {
 
         /// Skips a Group type while deserializing
         pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
-            Self::deserialize_prefix_two(r)?;
+            #[cfg(feature = "heat-compat")]
+            {
+                Self::deserialize_prefix_two(r)?;
+            }
             Self::deserialize_content_skip(r)?;
             Ok(())
         }
@@ -2260,9 +2261,12 @@ pub mod group {
 
     impl<'de> TdfDeserialize<'de> for GroupSlice<'de> {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            let is_two = Self::deserialize_prefix_two(r)?;
+            #[cfg(feature = "heat-compat")]
+            {
+                Self::deserialize_prefix_two(r)?;
+            }
             let data = Self::deserialize_content_skip(r)?;
-            Ok(Self { is_two, data })
+            Ok(Self { data })
         }
     }
 }

@@ -459,13 +459,18 @@ impl<'de> TdfDeserializer<'de> {
     #[inline]
     pub fn group<A, R>(&mut self, tag: RawTag, mut action: A) -> DecodeResult<R>
     where
-        A: FnMut(bool, &mut Self) -> DecodeResult<R>,
+        A: FnMut(&mut Self) -> DecodeResult<R>,
     {
         self.until_tag(tag, TdfType::Group)?;
         self.group += 1;
-        let is_two = GroupSlice::deserialize_prefix_two(self)?;
 
-        let value = action(is_two, self)?;
+        #[cfg(feature = "heat-compat")]
+        {
+            // Deserialize the prefix from the heat bug
+            GroupSlice::deserialize_prefix_two(self)?;
+        }
+
+        let value = action(self)?;
 
         // Deserialize any remaining group content
         GroupSlice::deserialize_content_skip(self)?;
@@ -739,11 +744,11 @@ mod test {
         // NOPA shouldn't be accessible from this depth
         assert_eq!(r.try_tag::<u32>(b"NOPA").unwrap(), None);
 
-        r.group(b"OUTR", |_, r| {
+        r.group(b"OUTR", |r| {
             let tes2: u32 = r.tag(b"VALU")?;
             assert_eq!(tes2, 12);
 
-            r.group(b"INNR", |_, r| {
+            r.group(b"INNR", |r| {
                 let goal: u32 = r.tag(b"GOAL")?;
                 assert_eq!(goal, 34);
 
