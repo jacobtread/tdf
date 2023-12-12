@@ -944,7 +944,7 @@ pub mod list {
         let ty: TdfType = TdfType::deserialize_owned(r)?;
         let length: usize = usize::deserialize_owned(r)?;
         for _ in 0..length {
-            ty.skip(r)?;
+            ty.skip(r, true)?;
         }
         Ok(())
     }
@@ -952,17 +952,7 @@ pub mod list {
     /// Serializes the header portion of a list, which contains the
     /// type and length of the list
     pub fn serialize_list_header<S: TdfSerializer>(w: &mut S, ty: TdfType, length: usize) {
-        #[cfg(feature = "heat-compat")]
-        {
-            let ty = ty.heat_compat_list_type();
-            ty.serialize_owned(w);
-        }
-
-        #[cfg(not(feature = "heat-compat"))]
-        {
-            ty.serialize_owned(w);
-        }
-
+        ty.serialize_owned(w);
         length.serialize_owned(w);
     }
 
@@ -1389,8 +1379,8 @@ pub mod map {
     pub fn skip_map(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let (key_ty, value_ty, length) = deserialize_map_header(r)?;
         for _ in 0..length {
-            key_ty.skip(r)?;
-            value_ty.skip(r)?;
+            key_ty.skip(r, true)?;
+            value_ty.skip(r, true)?;
         }
         Ok(())
     }
@@ -1661,6 +1651,7 @@ pub mod tagged_union {
         reader::TdfDeserializer,
         tag::{Tag, Tagged, TdfType},
         writer::TdfSerializer,
+        GroupSlice,
     };
 
     /// Representation of a tagged union
@@ -1717,10 +1708,15 @@ pub mod tagged_union {
     }
 
     /// Skips the next tagged unoion while deserializing
-    pub fn skip_tagged_union(r: &mut TdfDeserializer) -> DecodeResult<()> {
+    pub fn skip_tagged_union(r: &mut TdfDeserializer, heat_compat: bool) -> DecodeResult<()> {
         let ty = r.read_byte()?;
         if ty != TAGGED_UNSET_KEY {
-            Tagged::skip(r)?;
+            // Heat compat assumes the value is always a group
+            if heat_compat {
+                GroupSlice::skip(r, false)?;
+            } else {
+                Tagged::skip(r)?;
+            }
         }
         Ok(())
     }
@@ -2173,7 +2169,7 @@ pub mod u12 {
 pub mod group {
     //! Group type related implementations and helper functions
 
-    use super::TdfDeserialize;
+    use super::{tagged_union::skip_tagged_union, TdfDeserialize};
     use crate::{error::DecodeResult, reader::TdfDeserializer, tag::Tagged};
 
     /// [GroupSlice] is a slice of bytes representing a group tdf that hasn't
@@ -2181,7 +2177,6 @@ pub mod group {
     ///
     /// The structure also provides functions that are useful for decoding group types:
     ///
-    /// * [GroupSlice::deserialize_prefix_two] - Attempt to deserialize the list prefix
     /// * [GroupSlice::deserialize_group_end] - Attempt to deserialize the end of list
     /// * [GroupSlice::deserialize_content] - Attempt to deserialize the content using an action
     /// * [GroupSlice::deserialize_content_skip] - Attempt to deserialize the content skipping all values
@@ -2191,17 +2186,6 @@ pub mod group {
     }
 
     impl GroupSlice<'_> {
-        /// This is a product of the heat bug, this value is not actualy apart
-        /// of structs but is handled here as it has been encounted in the HNET
-        /// list where a union is miss encoded as a struct
-        pub fn deserialize_prefix_two(r: &mut TdfDeserializer) -> DecodeResult<()> {
-            let is_two = r.read_byte()? == 2;
-            if !is_two {
-                r.step_back();
-            }
-            Ok(())
-        }
-
         /// Attempts to read a byte if the byte value is zero the group is
         /// considered ended otherwise the cursor is stepped back and reading
         /// should continue as normal
@@ -2248,12 +2232,30 @@ pub mod group {
             Self::deserialize_content(r, Tagged::skip)
         }
 
-        /// Skips a Group type while deserializing
-        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
-            #[cfg(feature = "heat-compat")]
-            {
-                Self::deserialize_prefix_two(r)?;
+        /// Attempts to validate that a group can be properly decoded from the message
+        fn try_validate_group(r: &mut TdfDeserializer) -> bool {
+            // Store the cursor for restoring
+            let cursor = r.cursor;
+
+            let mut valid = false;
+
+            // Attempt to deserialize the group
+            if GroupSlice::deserialize_content_skip(r).is_ok() {
+                valid = true;
             }
+
+            // Restore cursor
+            r.cursor = cursor;
+
+            valid
+        }
+
+        /// Skips a Group type while deserializing
+        pub fn skip(r: &mut TdfDeserializer, heat_compat: bool) -> DecodeResult<()> {
+            if heat_compat && !Self::try_validate_group(r) {
+                return skip_tagged_union(r, true);
+            }
+
             Self::deserialize_content_skip(r)?;
             Ok(())
         }
@@ -2261,10 +2263,6 @@ pub mod group {
 
     impl<'de> TdfDeserialize<'de> for GroupSlice<'de> {
         fn deserialize(r: &mut TdfDeserializer<'de>) -> DecodeResult<Self> {
-            #[cfg(feature = "heat-compat")]
-            {
-                Self::deserialize_prefix_two(r)?;
-            }
             let data = Self::deserialize_content_skip(r)?;
             Ok(Self { data })
         }

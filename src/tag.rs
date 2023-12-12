@@ -38,7 +38,7 @@ impl Tagged {
     /// the specific skip implementation for that type
     pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
         let tag = Self::deserialize_owned(r)?;
-        tag.ty.skip(r)
+        tag.ty.skip(r, false)
     }
 
     /// Serializes a tagged value from the raw tag and value type
@@ -179,22 +179,6 @@ pub enum TdfType {
     Generic = 0xC,
 }
 
-impl TdfType {
-    /// Gets the heat bug version of this tdf type
-    ///
-    /// With the head bug in blaze sdk when encoding lists of Unions, Maps,
-    /// or Sub lists they are incorrectly encoded as Group types, in order
-    /// to be compatable with clients this bug must be emulated for the
-    /// "heat-compat" feature flag
-    #[cfg(feature = "heat-compat")]
-    pub fn heat_compat_list_type(self) -> TdfType {
-        match self {
-            Self::TaggedUnion | Self::Map | Self::List => TdfType::Group,
-            _ => self,
-        }
-    }
-}
-
 /// Convert bytes back to tdf types
 impl TryFrom<u8> for TdfType {
     type Error = DecodeError;
@@ -220,14 +204,14 @@ impl TryFrom<u8> for TdfType {
 
 impl TdfType {
     /// Skips the underlying type for this type
-    pub fn skip(&self, r: &mut TdfDeserializer) -> DecodeResult<()> {
+    pub fn skip(&self, r: &mut TdfDeserializer, heat_compat: bool) -> DecodeResult<()> {
         match self {
             TdfType::VarInt => skip_var_int(r),
             TdfType::String | TdfType::Blob => Blob::skip(r),
-            TdfType::Group => GroupSlice::skip(r),
+            TdfType::Group => GroupSlice::skip(r, heat_compat),
             TdfType::List => skip_list(r),
             TdfType::Map => skip_map(r),
-            TdfType::TaggedUnion => skip_tagged_union(r),
+            TdfType::TaggedUnion => skip_tagged_union(r, heat_compat),
             TdfType::VarIntList => VarIntList::skip(r),
             TdfType::ObjectType => ObjectType::skip(r),
             TdfType::ObjectId => ObjectId::skip(r),

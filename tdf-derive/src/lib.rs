@@ -481,20 +481,17 @@ fn impl_deserialize_struct(input: &DeriveInput, data: &DataStruct) -> TokenStrea
     let idents = data.fields.iter().filter_map(|field| field.ident.as_ref());
     let impls = data.fields.iter().map(tag_field_deserialize);
 
-    let mut leading = None;
     let mut trailing = None;
 
     // Groups need leading deserialization for possible prefixes and trailing
     // deserialization to read any unused tags and to read the group end byte
     if attributes.group {
-        leading = Some(quote!( tdf::GroupSlice::deserialize_prefix_two(r)?; ));
         trailing = Some(quote!( tdf::GroupSlice::deserialize_content_skip(r)?; ));
     }
 
     quote! {
         impl #generics tdf::TdfDeserialize<#lifetime> for #ident #generics #where_clause {
             fn deserialize(r: &mut tdf::TdfDeserializer<#lifetime>) -> tdf::DecodeResult<Self> {
-                #leading
                 #(#impls)*
                 #trailing
                 Ok(Self {
@@ -600,11 +597,10 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                     assert!(!has_default, "Default variant already defined");
                     has_default = true;
 
-                    // TODO: Ensure no duplicates & validate value tag matches
                     quote! {
                         _  => {
                             let tag = tdf::Tagged::deserialize_owned(r)?;
-                            tag.ty.skip(r)?;
+                            tag.ty.skip(r, false)?;
                             Self::#var_ident
                         }
                     }
@@ -636,12 +632,10 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
                         })
                         .unzip();
 
-                    // TODO: Ensure no duplicates & validate value tag matches
                     quote! {
                         #discriminant => {
                             let tag = tdf::Tagged::deserialize_owned(r)?;
 
-                            tdf::GroupSlice::deserialize_prefix_two(r)?;
                             #(#impls)*
                             tdf::GroupSlice::deserialize_content_skip(r)?;
 
@@ -663,7 +657,6 @@ fn impl_deserialize_tagged_enum(input: &DeriveInput, data: &DataEnum) -> TokenSt
 
                     let field_ty = &field.ty;
 
-                    // TODO: Ensure no duplicates & validate value tag matches
                     quote! {
                         #discriminant => {
                             let tag = tdf::Tagged::deserialize_owned(r)?;

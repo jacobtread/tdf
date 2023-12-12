@@ -11,7 +11,7 @@ keywords = ["EA", "serialization", "deserialization", "packet", "blazesdk"]
 
 [package]
 name = "tdf"
-version = "0.2.0"
+version = "0.3.0"
 
 categories = ["network-programming", "parser-implementations"]
 description = "Library for deserializing and serializing tdf values from BlazeSDK"
@@ -38,5 +38,3 @@ serde = ["dep:serde"]
 bytes = ["dep:bytes"]
 # Derive macros
 derive = ["dep:tdf-derive"]
-# Compatability with heat bug
-heat-compat = []

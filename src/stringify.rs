@@ -109,20 +109,25 @@ where
         let tag = Tagged::deserialize_owned(&mut self.r)?;
         self.write_indent(indent)?;
         write!(&mut self.w, "\"{}\": ", tag.tag)?;
-        self.stringify_type(indent, &tag.ty)?;
+        self.stringify_type(indent, &tag.ty, false)?;
         self.w.write_str(",\n")?;
         Ok(())
     }
 
-    fn stringify_type(&mut self, indent: usize, ty: &TdfType) -> StringifyResult {
+    fn stringify_type(
+        &mut self,
+        indent: usize,
+        ty: &TdfType,
+        heat_compat: bool,
+    ) -> StringifyResult {
         match ty {
             TdfType::VarInt => self.stringify_var_int(),
             TdfType::String => self.stringify_string(),
             TdfType::Blob => self.stringify_blob(),
-            TdfType::Group => self.stringify_group(indent),
+            TdfType::Group => self.stringify_group(indent, heat_compat),
             TdfType::List => self.stringify_list(indent),
             TdfType::Map => self.stringify_map(indent),
-            TdfType::TaggedUnion => self.stringify_tagged_union(indent),
+            TdfType::TaggedUnion => self.stringify_tagged_union(indent, heat_compat),
             TdfType::VarIntList => self.stringify_var_int_list(),
             TdfType::ObjectType => self.stringify_object_type(),
             TdfType::ObjectId => self.stringify_object_id(),
@@ -163,12 +168,34 @@ where
         Ok(())
     }
 
-    fn stringify_group(&mut self, indent: usize) -> StringifyResult {
+    /// Attempts to validate that a group can be properly decoded from the message
+    fn try_validate_group(&mut self) -> bool {
+        // Store the cursor for restoring
+        let cursor = self.r.cursor;
+
+        let mut valid = false;
+
+        // Attempt to deserialize the group
+        if GroupSlice::deserialize_content_skip(&mut self.r).is_ok() {
+            valid = true;
+        }
+
+        // Restore cursor
+        self.r.cursor = cursor;
+
+        valid
+    }
+
+    fn stringify_group(&mut self, indent: usize, heat_compat: bool) -> StringifyResult {
+        // See if the value can actually be deserialized as a group (It might actually be a heat bugged union)
+        if heat_compat && !self.try_validate_group() {
+            // TODO: Check other possible heat types
+
+            // Try and serialize it as a union
+            return self.stringify_tagged_union(indent, true);
+        }
+
         self.w.write_str("{\n")?;
-
-        // TODO: Proper heat bug handling
-
-        GroupSlice::deserialize_prefix_two(&mut self.r)?;
 
         loop {
             let is_end = GroupSlice::deserialize_group_end(&mut self.r)?;
@@ -205,7 +232,7 @@ where
                 self.write_indent(next_ident)?;
             }
 
-            self.stringify_type(next_ident, &value_type)?;
+            self.stringify_type(next_ident, &value_type, true)?;
 
             if i != last_index {
                 self.w.write_str(", ")?;
@@ -264,13 +291,13 @@ where
         value_ty: &TdfType,
     ) -> StringifyResult {
         self.write_indent(indent)?;
-        self.stringify_type(indent, key_ty)?;
+        self.stringify_type(indent, key_ty, true)?;
         self.w.write_str(": ")?;
-        self.stringify_type(indent, value_ty)?;
+        self.stringify_type(indent, value_ty, true)?;
         Ok(())
     }
 
-    fn stringify_tagged_union(&mut self, indent: usize) -> StringifyResult {
+    fn stringify_tagged_union(&mut self, indent: usize, heat_compat: bool) -> StringifyResult {
         let key = self.r.read_byte()?;
 
         if key == TAGGED_UNSET_KEY {
@@ -278,10 +305,19 @@ where
             return Ok(());
         }
 
-        let tag = Tagged::deserialize_owned(&mut self.r)?;
-        write!(&mut self.w, "Union(\"{}\", {}, ", &tag.tag, key)?;
-        self.stringify_type(indent + 1, &tag.ty)?;
-        self.w.write_char(')')?;
+        // Attempt deserialize normally
+        if !heat_compat {
+            let tag = Tagged::deserialize_owned(&mut self.r)?;
+            write!(&mut self.w, "Union(\"{}\", {}, ", &tag.tag, key)?;
+            self.stringify_type(indent + 1, &tag.ty, false)?;
+            self.w.write_char(')')?;
+        } else {
+            // Heat compat assumes the union value is always a group
+            write!(&mut self.w, "HeatUnion({}, ", key)?;
+            self.stringify_group(indent + 1, false)?;
+            self.w.write_char(')')?;
+        }
+
         Ok(())
     }
 

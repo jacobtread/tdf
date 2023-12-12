@@ -312,7 +312,7 @@ impl<'de> TdfDeserializer<'de> {
 
             // Skip tags that don't match
             if tagged.tag != tag {
-                tagged.ty.skip(self)?;
+                tagged.ty.skip(self, false)?;
                 continue;
             }
 
@@ -463,12 +463,6 @@ impl<'de> TdfDeserializer<'de> {
     {
         self.until_tag(tag, TdfType::Group)?;
         self.group += 1;
-
-        #[cfg(feature = "heat-compat")]
-        {
-            // Deserialize the prefix from the heat bug
-            GroupSlice::deserialize_prefix_two(self)?;
-        }
 
         let value = action(self)?;
 
