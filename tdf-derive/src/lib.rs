@@ -555,7 +555,7 @@ fn impl_deserialize_repr_enum(input: &DeriveInput, data: &DataEnum) -> TokenStre
     quote! {
         impl tdf::TdfDeserialize<'_> for #ident {
             fn deserialize(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
-                let value = <#repr>::deserialize(r)?;
+                let value = <#repr as tdf::TdfDeserialize<'_>>::deserialize(r)?;
                 Ok(match value {
                     #(#variant_cases,)*
                     #default

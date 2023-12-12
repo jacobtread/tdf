@@ -166,7 +166,9 @@ where
     fn stringify_group(&mut self, indent: usize) -> StringifyResult {
         self.w.write_str("{\n")?;
 
-        let is_two = GroupSlice::deserialize_prefix_two(&mut self.r)?;
+        // TODO: Proper heat bug handling
+
+        GroupSlice::deserialize_prefix_two(&mut self.r)?;
 
         loop {
             let is_end = GroupSlice::deserialize_group_end(&mut self.r)?;
@@ -179,10 +181,6 @@ where
 
         self.write_indent(indent)?;
         self.w.write_char('}')?;
-
-        if is_two {
-            self.w.write_str(" (2)")?;
-        }
 
         Ok(())
     }

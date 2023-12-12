@@ -67,7 +67,7 @@
 //! let buffer = &[/* Example byte slice buffer */];
 //! let mut r = TdfDeserializer::new(buffer);
 //!
-//! r.group(b"TEST", |_, r| {
+//! r.group(b"TEST", |r| {
 //!     let tag: u32 = r.tag(b"INNR")?;
 //!
 //!     Ok(())
@@ -92,7 +92,7 @@
 //! let mut r = TdfDeserializer::new(buffer);
 //!
 //! // Returning a value from the group
-//! let value = r.group(b"TEST", |_, r| {
+//! let value = r.group(b"TEST", |r| {
 //!     let tag: u32 = r.tag(b"INNR")?;
 //!
 //!     Ok(tag)
@@ -100,7 +100,7 @@
 //! .unwrap();
 //!
 //! // Returning multiple values from the group
-//! let (a, b, c) = r.group(b"TEST", |_, r| {
+//! let (a, b, c) = r.group(b"TEST", |r| {
 //!     let a: u32 = r.tag(b"A")?;
 //!     let b: u32 = r.tag(b"B")?;
 //!     let c: u32 = r.tag(b"C")?;
@@ -112,7 +112,7 @@
 //! let mut my_var = 1;
 //!
 //! // Modifying variables from the group
-//! r.group(b"TEST", |_, r| {
+//! r.group(b"TEST", |r| {
 //!     my_var = r.tag(b"A")?;
 //!
 //!     Ok(())
@@ -444,7 +444,7 @@ impl<'de> TdfDeserializer<'de> {
     /// let buffer = &[/* Example byte slice buffer */];
     /// let mut r = TdfDeserializer::new(buffer);
     ///
-    /// r.group(b"TEST", |_, r| {
+    /// r.group(b"TEST", |r| {
     ///     let tag: u32 = r.tag(b"INNR")?;
     ///
     ///     Ok(())
