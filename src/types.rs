@@ -2233,16 +2233,12 @@ pub mod group {
         }
 
         /// Attempts to validate that a group can be properly decoded from the message
-        fn try_validate_group(r: &mut TdfDeserializer) -> bool {
+        pub fn try_validate_group(r: &mut TdfDeserializer) -> bool {
             // Store the cursor for restoring
             let cursor = r.cursor;
 
-            let mut valid = false;
-
             // Attempt to deserialize the group
-            if GroupSlice::deserialize_content_skip(r).is_ok() {
-                valid = true;
-            }
+            let valid = GroupSlice::deserialize_content_skip(r).is_ok();
 
             // Restore cursor
             r.cursor = cursor;

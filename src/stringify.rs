@@ -168,27 +168,9 @@ where
         Ok(())
     }
 
-    /// Attempts to validate that a group can be properly decoded from the message
-    fn try_validate_group(&mut self) -> bool {
-        // Store the cursor for restoring
-        let cursor = self.r.cursor;
-
-        let mut valid = false;
-
-        // Attempt to deserialize the group
-        if GroupSlice::deserialize_content_skip(&mut self.r).is_ok() {
-            valid = true;
-        }
-
-        // Restore cursor
-        self.r.cursor = cursor;
-
-        valid
-    }
-
     fn stringify_group(&mut self, indent: usize, heat_compat: bool) -> StringifyResult {
         // See if the value can actually be deserialized as a group (It might actually be a heat bugged union)
-        if heat_compat && !self.try_validate_group() {
+        if heat_compat && !GroupSlice::try_validate_group(&mut self.r) {
             // TODO: Check other possible heat types
 
             // Try and serialize it as a union
