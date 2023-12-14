@@ -660,6 +660,26 @@ impl<'de> TdfDeserializer<'de> {
         Ok(byte)
     }
 
+    /// Keeps reading until a null terminator is reached
+    pub fn until_terminator(&mut self) -> DecodeResult<()> {
+        while self.cursor < self.buffer.len() {
+            let byte: u8 = self.buffer[self.cursor];
+            self.cursor += 1;
+
+            // Reached the null terminator
+            if byte == 0 {
+                return Ok(());
+            }
+        }
+
+        // Reached end of buffer without terminator
+        Err(DecodeError::UnexpectedEof {
+            cursor: self.cursor,
+            wanted: 1,
+            remaining: 0,
+        })
+    }
+
     /// Internal function used to read a slice of bytes from the buffer
     pub(crate) fn read_bytes(&mut self, length: usize) -> DecodeResult<&'de [u8]> {
         if self.cursor + length > self.buffer.len() {

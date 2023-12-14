@@ -5,7 +5,8 @@ pub use crate::stringify::{StringifyError, TdfStringifier};
 pub use crate::tag::{RawTag, Tag, Tagged, TdfType};
 pub use crate::types::{
     Blob, GroupSlice, ObjectId, ObjectType, TaggedUnion, TdfDeserialize, TdfDeserializeOwned,
-    TdfMap, TdfSerialize, TdfSerializeOwned, TdfTyped, VarIntList, U12,
+    TdfGeneric, TdfGenericInner, TdfGenericValue, TdfMap, TdfSerialize, TdfSerializeOwned,
+    TdfTyped, VarIntList,
 };
 pub use crate::{reader::TdfDeserializer, writer::TdfSerializer};
 

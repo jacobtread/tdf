@@ -2,12 +2,12 @@
 //! with Blaze packets
 
 pub use blob::Blob;
+pub use generic::{TdfGeneric, TdfGenericInner, TdfGenericValue};
 pub use group::GroupSlice;
 pub use map::TdfMap;
 pub use object_id::ObjectId;
 pub use object_type::ObjectType;
 pub use tagged_union::TaggedUnion;
-pub use u12::U12;
 pub use var_int_list::VarIntList;
 
 use crate::{error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer};
@@ -2115,53 +2115,98 @@ pub mod float {
     }
 }
 
-pub mod u12 {
+pub mod generic {
     //! U12 type related implementations and helper functions
 
-    use super::{Blob, TdfDeserialize, TdfSerialize, TdfTyped};
+    use super::{var_int::skip_var_int, TdfTyped};
     use crate::{
-        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, writer::TdfSerializer,
-        GroupSlice, TdfDeserializeOwned,
+        error::DecodeResult, reader::TdfDeserializer, tag::TdfType, GroupSlice, TdfDeserializeOwned,
     };
 
-    /// [U12] The type/name for this structure is not yet known
-    /// but is represented using 8 bytes of data and a string value
-    #[derive(Debug)]
-    pub struct U12 {
-        /// The leading byte value (Encoding not yet known)
-        pub data: [u8; 8],
-        /// Associated string value
-        pub value: String,
+    /// Generic Tdf types, this is only partially implemented and is likely
+    /// not correct or fitting all use cases. Only [TdfDeserialize] is implemented
+    pub struct TdfGeneric {
+        /// Value may not be present
+        pub inner: Option<TdfGenericInner>,
     }
 
-    impl U12 {
-        /// Skips a U12 value while deserializing
-        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
-            r.skip_length(8)?;
-            Blob::skip(r)?;
+    impl TdfDeserializeOwned for TdfGeneric {
+        fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
+            let present: bool = bool::deserialize_owned(r)?;
+            if !present {
+                return Ok(Self { inner: None });
+            }
+
+            // Basic types == TdfType. For Group, Union, VarIntList, Enum, Map, List this will be FNV1_String8(fullName).
+            let tdf_id: u64 = u64::deserialize_owned(r)?;
+
+            // Unknown byte
+            _ = r.read_byte()?;
+
+            let ty: TdfType = TdfType::deserialize_owned(r)?;
+
+            let value = match ty {
+                TdfType::VarInt => TdfGenericValue::Int(usize::deserialize_owned(r)?),
+                TdfType::String => TdfGenericValue::String(String::deserialize_owned(r)?),
+                ty => {
+                    // Skip unhandled type
+                    ty.skip(r, false)?;
+
+                    TdfGenericValue::Other
+                }
+            };
+
             GroupSlice::deserialize_group_end(r)?;
+
+            Ok(Self {
+                inner: Some(TdfGenericInner { tdf_id, value }),
+            })
+        }
+    }
+
+    impl TdfGeneric {
+        /// Skips a [TdfGeneric] value
+        pub fn skip(r: &mut TdfDeserializer) -> DecodeResult<()> {
+            let present: bool = bool::deserialize_owned(r)?;
+            if !present {
+                return Ok(());
+            }
+
+            // Tdf ID
+            skip_var_int(r)?;
+
+            // Get the type of value
+            let ty = TdfType::deserialize_owned(r)?;
+            // Skip the actual value
+            ty.skip(r, false)?;
+
+            // Terminator
+            GroupSlice::deserialize_group_end(r)?;
+
             Ok(())
         }
     }
 
-    impl TdfDeserializeOwned for U12 {
-        fn deserialize_owned(r: &mut TdfDeserializer<'_>) -> DecodeResult<Self> {
-            let data: [u8; 8] = r.read_fixed()?;
-            let value: String = String::deserialize(r)?;
-            GroupSlice::deserialize_group_end(r)?;
-            Ok(Self { data, value })
-        }
+    /// Portion of a [TdfGeneric] that only exists if marked as present
+    pub struct TdfGenericInner {
+        /// Appears to usually be a hash value
+        pub tdf_id: u64,
+        /// The actual generic value
+        pub value: TdfGenericValue,
     }
 
-    impl TdfSerialize for U12 {
-        fn serialize<S: TdfSerializer>(&self, w: &mut S) {
-            w.write_slice(&self.data);
-            self.value.serialize(w);
-            w.write_byte(0);
-        }
+    /// Only basic types are supported more complex
+    /// types may be added later
+    pub enum TdfGenericValue {
+        /// Generic integer type
+        Int(usize),
+        /// Generic string type
+        String(String),
+        /// Type was an unimplemented type
+        Other,
     }
 
-    impl TdfTyped for U12 {
+    impl TdfTyped for TdfGeneric {
         const TYPE: TdfType = TdfType::Generic;
     }
 }

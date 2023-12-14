@@ -6,7 +6,7 @@ use crate::{
     types::{
         float::skip_f32, group::GroupSlice, list::skip_list, map::skip_map,
         tagged_union::skip_tagged_union, var_int::skip_var_int, Blob, ObjectId, ObjectType,
-        TdfDeserializeOwned, TdfSerializeOwned, VarIntList, U12,
+        TdfDeserializeOwned, TdfGeneric, TdfSerializeOwned, VarIntList,
     },
     writer::TdfSerializer,
 };
@@ -216,7 +216,7 @@ impl TdfType {
             TdfType::ObjectType => ObjectType::skip(r),
             TdfType::ObjectId => ObjectId::skip(r),
             TdfType::Float => skip_f32(r),
-            TdfType::Generic => U12::skip(r),
+            TdfType::Generic => TdfGeneric::skip(r),
         }
     }
 }

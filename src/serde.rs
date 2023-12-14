@@ -1,7 +1,7 @@
 //! This module contains the serde Serialize implementations for the
 //! structures created by Pocket Relay
 
-use crate::{ObjectId, ObjectType, U12};
+use crate::{ObjectId, ObjectType};
 
 use super::types::{Blob, TdfMap, VarIntList};
 use serde::ser::{SerializeMap, SerializeStruct};
@@ -65,18 +65,6 @@ impl Serialize for ObjectId {
         let mut stru = serializer.serialize_struct("ObjectId", 2)?;
         stru.serialize_field("ty", &self.ty)?;
         stru.serialize_field("id", &self.id)?;
-        stru.end()
-    }
-}
-
-impl Serialize for U12 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut stru = serializer.serialize_struct("U12", 2)?;
-        stru.serialize_field("data", &self.data)?;
-        stru.serialize_field("value", &self.value)?;
         stru.end()
     }
 }

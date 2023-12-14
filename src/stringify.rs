@@ -7,7 +7,7 @@ use crate::{
     tag::{Tagged, TdfType},
     types::{
         group::GroupSlice, map::deserialize_map_header, tagged_union::TAGGED_UNSET_KEY, Blob,
-        ObjectId, ObjectType, TdfDeserialize, TdfDeserializeOwned, U12,
+        ObjectId, ObjectType, TdfDeserialize, TdfDeserializeOwned,
     },
 };
 use std::fmt::Display;
@@ -132,7 +132,7 @@ where
             TdfType::ObjectType => self.stringify_object_type(),
             TdfType::ObjectId => self.stringify_object_id(),
             TdfType::Float => self.stringify_f32(),
-            TdfType::Generic => self.stringify_u12(),
+            TdfType::Generic => self.stringify_generic(indent),
         }
     }
 
@@ -339,9 +339,29 @@ where
         Ok(())
     }
 
-    fn stringify_u12(&mut self) -> StringifyResult {
-        let value = U12::deserialize(&mut self.r)?;
-        write!(&mut self.w, "{:?}", value)?;
+    fn stringify_generic(&mut self, indent: usize) -> StringifyResult {
+        let present: bool = bool::deserialize_owned(&mut self.r)?;
+
+        if !present {
+            self.w.write_str("Generic(NotSet)")?;
+            return Ok(());
+        }
+
+        let tdf_id: u64 = u64::deserialize_owned(&mut self.r)?;
+
+        // Unknown byte
+        _ = self.r.read_byte()?;
+
+        let ty: TdfType = TdfType::deserialize_owned(&mut self.r)?;
+
+        write!(&mut self.w, "Generic({}, {:?}, ", tdf_id, ty)?;
+
+        self.stringify_type(indent + 1, &ty, false)?;
+
+        self.w.write_char(')')?;
+
+        GroupSlice::deserialize_group_end(&mut self.r)?;
+
         Ok(())
     }
 }
