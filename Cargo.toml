@@ -11,7 +11,7 @@ keywords = ["EA", "serialization", "deserialization", "packet", "blazesdk"]
 
 [package]
 name = "tdf"
-version = "0.3.0"
+version = "0.4.0"
 
 categories = ["network-programming", "parser-implementations"]
 description = "Library for deserializing and serializing tdf values from BlazeSDK"
@@ -27,7 +27,7 @@ readme.workspace = true
 [dependencies]
 bytes = { version = "1", optional = true }
 serde = { version = "1", optional = true }
-tdf-derive = { version = "0.1.1", path = "./tdf-derive", optional = true }
+tdf-derive = { version = "0.2.0", path = "./tdf-derive", optional = true }
 
 [features]
 # Default features enables BlazeSSL and serde
